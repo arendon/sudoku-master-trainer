@@ -234,24 +234,44 @@ object DigitStrokeRecognizer {
         width: Float,
         height: Float
     ): Boolean {
-        if (strokes.size == 1 && width > 20f && (height / max(1f, width)) < 0.17f) {
+        // Strike-through gesture (wide, flat horizontal line)
+        if (strokes.size == 1 && width > 24f && (height / max(1f, width)) < 0.22f) {
             return true
         }
         val mainStroke = strokes.maxByOrNull { strokeLength(it) } ?: return false
         var xReversals = 0
         var lastDirX = 0
+        var yReversals = 0
+        var lastDirY = 0
         val totalPathLen = strokeLength(mainStroke)
         for (i in 1 until mainStroke.size) {
             val dx = mainStroke[i].x - mainStroke[i - 1].x
-            if (abs(dx) > 4f) {
-                val dir = if (dx > 0) 1 else -1
-                if (lastDirX != 0 && dir != lastDirX) {
+            val dy = mainStroke[i].y - mainStroke[i - 1].y
+            if (abs(dx) > 3.5f) {
+                val dirX = if (dx > 0) 1 else -1
+                if (lastDirX != 0 && dirX != lastDirX) {
                     xReversals++
                 }
-                lastDirX = dir
+                lastDirX = dirX
+            }
+            if (abs(dy) > 3.5f) {
+                val dirY = if (dy > 0) 1 else -1
+                if (lastDirY != 0 && dirY != lastDirY) {
+                    yReversals++
+                }
+                lastDirY = dirY
             }
         }
-        return xReversals >= 4 && totalPathLen > width * 2.6f
+        val aspect = width / max(1f, height)
+        // Horizontal zig-zag scratch-out (at least 5 horizontal reversals and wider than tall)
+        if (xReversals >= 5 && aspect > 1.15f && totalPathLen > width * 2.8f) {
+            return true
+        }
+        // Dense multi-directional blot-out scribble
+        if (xReversals >= 6 && yReversals >= 4 && totalPathLen > max(width, height) * 4.0f) {
+            return true
+        }
+        return false
     }
 
     /**
@@ -623,17 +643,19 @@ object DigitStrokeRecognizer {
             }
 
             6 -> {
-                // 6 has its closed loop in the bottom half, never returns to the top third after reaching the bottom,
-                // and has almost no upward travel in the top third (unlike 8 and 9).
-                if (f.botHalfAngularSweep > 3.2f &&
+                // 6 has its closed loop in the bottom half and a single open downward/diagonal stroke in the top half
+                if (f.botHalfAngularSweep > 3.0f &&
                     !f.returnsToTopAfterBottom &&
-                    f.upwardTravelInTopThird < 0.08f &&
+                    f.upperRightDensity < 0.14f &&
                     f.endY in 0.36f..0.88f
                 ) {
-                    adj += 0.28f
+                    adj += 0.24f
                 }
                 if (f.startY < 0.30f && f.lowerLeftDensity > 0.14f) adj += 0.08f
-                if (f.returnsToTopAfterBottom || f.upwardTravelInTopThird > 0.16f) adj -= 0.22f
+                // If ink is present in all 4 quadrants including a full upper-right loop, it's an 8, not a 6
+                if (f.upperRightDensity > 0.18f && f.lowerRightDensity > 0.18f) {
+                    adj -= 0.24f
+                }
                 if (f.endY > 0.90f && f.botHalfAngularSweep < 2.5f) adj -= 0.18f
             }
 
@@ -650,26 +672,27 @@ object DigitStrokeRecognizer {
             }
 
             8 -> {
-                // An 8 must close or form a loop in the top half (climbing upward in the top third or returning to top)
-                val hasTopLoopClosure = f.returnsToTopAfterBottom || f.upwardTravelInTopThird >= 0.14f || f.strokeCount >= 2
-                if (hasTopLoopClosure && f.topHalfAngularSweep > 2.8f && f.botHalfAngularSweep > 2.8f) {
+                // An 8 has two loops: ink is distributed across all 4 quadrants (top-left, top-right, bottom-left, bottom-right)
+                val allQuadsPresent = f.upperRightDensity > 0.12f &&
+                    f.lowerRightDensity > 0.12f &&
+                    f.lowerLeftDensity > 0.12f &&
+                    (f.upperLeftVerticalDensity > 0.06f || f.topWidthRatio > 0.35f)
+
+                val hasTopLoopClosure = f.returnsToTopAfterBottom ||
+                    f.upwardTravelInTopThird >= 0.10f ||
+                    f.strokeCount >= 2 ||
+                    allQuadsPresent
+
+                if (hasTopLoopClosure) {
                     adj += 0.24f
                 }
-                if (hasTopLoopClosure &&
-                    f.upperLeftVerticalDensity > 0.08f &&
-                    f.upperRightDensity > 0.14f &&
-                    f.lowerLeftDensity > 0.14f &&
-                    f.lowerRightDensity > 0.14f &&
-                    f.endY < 0.35f
-                ) {
-                    adj += 0.14f
+                if (allQuadsPresent && f.straightnessRatio > 1.8f) {
+                    adj += 0.16f
                 }
-                // Key disambiguator against '6': if a 1-stroke digit never returns to the top third and
-                // has no upward travel in the top third, it is an open-top '6', NOT an '8'!
-                if (!hasTopLoopClosure) {
-                    adj -= 0.32f
+                // If it clearly only has a bottom loop and negligible upper-right density, it's a 6, not an 8
+                if (f.upperRightDensity < 0.07f && !f.returnsToTopAfterBottom && f.strokeCount == 1) {
+                    adj -= 0.28f
                 }
-                if (f.straightnessRatio < 1.85f) adj -= 0.20f
             }
 
             9 -> {
@@ -986,7 +1009,7 @@ object DigitStrokeRecognizer {
             listOf(pt(0.26f, 0.50f), pt(0.78f, 0.50f))
         )
 
-        // --- DIGIT 8 (counter-clockwise top loop & clockwise top loop) ---
+        // --- DIGIT 8 (counter-clockwise top loop & clockwise top loop; center start; 2-stroke) ---
         add1Stroke(
             8,
             pt(0.52f, 0.06f), pt(0.22f, 0.16f), pt(0.22f, 0.34f), pt(0.50f, 0.48f),
@@ -1000,6 +1023,33 @@ object DigitStrokeRecognizer {
             pt(0.18f, 0.64f), pt(0.20f, 0.84f), pt(0.50f, 0.94f), pt(0.80f, 0.84f),
             pt(0.82f, 0.64f), pt(0.50f, 0.48f), pt(0.22f, 0.34f), pt(0.22f, 0.16f),
             pt(0.48f, 0.06f)
+        )
+        // Center/waist start (moving up around top loop first, then bottom loop)
+        add1Stroke(
+            8,
+            pt(0.50f, 0.48f), pt(0.78f, 0.34f), pt(0.78f, 0.16f), pt(0.50f, 0.06f),
+            pt(0.22f, 0.16f), pt(0.22f, 0.34f), pt(0.50f, 0.48f),
+            pt(0.82f, 0.64f), pt(0.80f, 0.84f), pt(0.50f, 0.94f),
+            pt(0.20f, 0.84f), pt(0.18f, 0.64f), pt(0.50f, 0.48f)
+        )
+        add1Stroke(
+            8,
+            pt(0.50f, 0.48f), pt(0.22f, 0.34f), pt(0.22f, 0.16f), pt(0.50f, 0.06f),
+            pt(0.78f, 0.16f), pt(0.78f, 0.34f), pt(0.50f, 0.48f),
+            pt(0.18f, 0.64f), pt(0.20f, 0.84f), pt(0.50f, 0.94f),
+            pt(0.80f, 0.84f), pt(0.82f, 0.64f), pt(0.50f, 0.48f)
+        )
+        // 2-stroke 8 (two stacked loops)
+        add2Stroke(
+            8,
+            listOf(
+                pt(0.50f, 0.06f), pt(0.22f, 0.16f), pt(0.22f, 0.34f),
+                pt(0.50f, 0.46f), pt(0.78f, 0.34f), pt(0.78f, 0.16f), pt(0.50f, 0.06f)
+            ),
+            listOf(
+                pt(0.50f, 0.46f), pt(0.18f, 0.64f), pt(0.20f, 0.84f),
+                pt(0.50f, 0.94f), pt(0.80f, 0.84f), pt(0.82f, 0.64f), pt(0.50f, 0.46f)
+            )
         )
 
         // --- DIGIT 9 (straight stem, curved bottom hook, and 4-o'clock start) ---

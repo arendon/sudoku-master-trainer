@@ -48,6 +48,8 @@ import kotlinx.coroutines.delay
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.hypot
+import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.sin
 
 /**
@@ -134,22 +136,28 @@ fun SudokuBoardCanvas(
                                 continue
                             }
 
-                            val gutter = size.width * 0.055f
-                            val gridSize = size.width - gutter
+                            val outerMargin = 2f
+                            val boardSide = min(size.width, size.height) - outerMargin * 2f
+                            val gutter = boardSide * 0.055f
+                            val gridSize = boardSide - gutter
                             val cellSize = gridSize / 9f
+                            val startX = (size.width - boardSide) / 2f
+                            val startY = (size.height - boardSide) / 2f
 
                             fun offsetToCell(pt: Offset): CellPos? {
-                                if (pt.x < gutter || pt.y < gutter) return null
-                                val c = ((pt.x - gutter) / cellSize).toInt()
-                                val r = ((pt.y - gutter) / cellSize).toInt()
+                                val relX = pt.x - startX
+                                val relY = pt.y - startY
+                                if (relX < gutter || relY < gutter || relX >= gutter + gridSize || relY >= gutter + gridSize) return null
+                                val c = ((relX - gutter) / cellSize).toInt()
+                                val r = ((relY - gutter) / cellSize).toInt()
                                 return if (r in 0..8 && c in 0..8) CellPos(r, c) else null
                             }
 
                             fun isNearCell(pt: Offset, target: CellPos): Boolean {
-                                val left = gutter + target.col * cellSize - cellSize * 0.35f
-                                val right = gutter + (target.col + 1) * cellSize + cellSize * 0.35f
-                                val top = gutter + target.row * cellSize - cellSize * 0.35f
-                                val bottom = gutter + (target.row + 1) * cellSize + cellSize * 0.35f
+                                val left = startX + gutter + target.col * cellSize - cellSize * 0.35f
+                                val right = startX + gutter + (target.col + 1) * cellSize + cellSize * 0.35f
+                                val top = startY + gutter + target.row * cellSize - cellSize * 0.35f
+                                val bottom = startY + gutter + (target.row + 1) * cellSize + cellSize * 0.35f
                                 return pt.x in left..right && pt.y in top..bottom
                             }
 
@@ -241,8 +249,8 @@ fun SudokuBoardCanvas(
                                                 }
                                                 InkInputMode.CANDIDATE_NOTE -> {
                                                     // Determine which mini-grid candidate (1..9) was tapped inside the cell
-                                                    val cellLeft = gutter + cell.col * cellSize
-                                                    val cellTop = gutter + cell.row * cellSize
+                                                    val cellLeft = startX + gutter + cell.col * cellSize
+                                                    val cellTop = startY + gutter + cell.row * cellSize
                                                     val subCol = (((releasePos.x - cellLeft) / (cellSize / 3f)).toInt()).coerceIn(0, 2)
                                                     val subRow = (((releasePos.y - cellTop) / (cellSize / 3f)).toInt()).coerceIn(0, 2)
                                                     val tappedDigit = subRow * 3 + subCol + 1
@@ -264,9 +272,13 @@ fun SudokuBoardCanvas(
                     }
                 }
         ) {
-            val gutter = size.width * 0.055f
-            val gridSize = size.width - gutter
+            val outerMargin = 2f
+            val boardSide = min(size.width, size.height) - outerMargin * 2f
+            val gutter = boardSide * 0.055f
+            val gridSize = boardSide - gutter
             val cellSize = gridSize / 9f
+            val startX = (size.width - boardSide) / 2f
+            val startY = (size.height - boardSide) / 2f
 
             val elimLookup = highlightedEliminations.groupBy({ it.cell }, { it.digit })
             val allPatternHighlighted = board.selectedPatternCells union highlightedPatternCells
@@ -279,12 +291,12 @@ fun SudokuBoardCanvas(
                 typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
             }
             for (i in 0..8) {
-                val cx = gutter + (i + 0.5f) * cellSize
-                val cy = gutter * 0.68f
+                val cx = startX + gutter + (i + 0.5f) * cellSize
+                val cy = startY + gutter * 0.68f
                 drawContext.canvas.nativeCanvas.drawText("C${i + 1}", cx, cy, headerPaint)
 
-                val rx = gutter * 0.48f
-                val ry = gutter + (i + 0.5f) * cellSize + headerPaint.textSize * 0.35f
+                val rx = startX + gutter * 0.48f
+                val ry = startY + gutter + (i + 0.5f) * cellSize + headerPaint.textSize * 0.35f
                 drawContext.canvas.nativeCanvas.drawText("R${i + 1}", rx, ry, headerPaint)
             }
 
@@ -292,8 +304,8 @@ fun SudokuBoardCanvas(
             for (r in 0..8) {
                 for (c in 0..8) {
                     val pos = CellPos(r, c)
-                    val left = gutter + c * cellSize
-                    val top = gutter + r * cellSize
+                    val left = startX + gutter + c * cellSize
+                    val top = startY + gutter + r * cellSize
 
                     val hasFilteredCandidate = filterDigit != null &&
                         (board.digitAt(pos) == filterDigit || filterDigit in board.candidatesAt(pos))
@@ -344,15 +356,15 @@ fun SudokuBoardCanvas(
                 // Vertical line
                 drawLine(
                     color = lineColor,
-                    start = Offset(offset, gutter),
-                    end = Offset(offset, gutter + gridSize),
+                    start = Offset(startX + offset, startY + gutter),
+                    end = Offset(startX + offset, startY + gutter + gridSize),
                     strokeWidth = strokeWidth
                 )
                 // Horizontal line
                 drawLine(
                     color = lineColor,
-                    start = Offset(gutter, offset),
-                    end = Offset(gutter + gridSize, offset),
+                    start = Offset(startX + gutter, startY + offset),
+                    end = Offset(startX + gutter + gridSize, startY + offset),
                     strokeWidth = strokeWidth
                 )
             }
@@ -360,12 +372,12 @@ fun SudokuBoardCanvas(
             // 4. Draw Visual Pattern Links (Walkthrough Step 2/3 & Hint Stage 3)
             for (link in visualLinks) {
                 val startCenter = Offset(
-                    x = gutter + (link.from.col + 0.5f) * cellSize,
-                    y = gutter + (link.from.row + 0.5f) * cellSize
+                    x = startX + gutter + (link.from.col + 0.5f) * cellSize,
+                    y = startY + gutter + (link.from.row + 0.5f) * cellSize
                 )
                 val endCenter = Offset(
-                    x = gutter + (link.to.col + 0.5f) * cellSize,
-                    y = gutter + (link.to.row + 0.5f) * cellSize
+                    x = startX + gutter + (link.to.col + 0.5f) * cellSize,
+                    y = startY + gutter + (link.to.row + 0.5f) * cellSize
                 )
 
                 val linkColor = when (link.linkType) {

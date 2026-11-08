@@ -109,9 +109,9 @@ object MlKitDigitRecognizer {
 
             val topMl = mlDigits.first()
 
-            // Structural 6-vs-8 safeguard: if ML Kit guesses 8 on a 1-stroke open-top '6'
-            // where the topological verifier has high confidence for 6, prefer 6.
-            val chosenDigit = if (topMl == 8 && geoDigit.digit == 6 && geoDigit.confidence >= 0.72f) {
+            // Structural 6-vs-8 safeguard: if ML Kit guesses 8 on a clear open-top '6'
+            // where the topological verifier has very high confidence (>= 0.88f) for 6, prefer 6.
+            val chosenDigit = if (topMl == 8 && geoDigit.digit == 6 && geoDigit.confidence >= 0.88f) {
                 6
             } else {
                 topMl

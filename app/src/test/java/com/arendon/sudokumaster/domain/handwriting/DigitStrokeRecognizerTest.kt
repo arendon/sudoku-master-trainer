@@ -205,6 +205,34 @@ class DigitStrokeRecognizerTest {
             ),
             "8 clockwise"
         )
+        // Digit 8: center/waist start
+        assertRecognizesDigit(
+            8,
+            listOf(
+                listOf(
+                    pt(50f, 48f), pt(78f, 34f), pt(78f, 16f), pt(50f, 8f),
+                    pt(22f, 16f), pt(22f, 34f), pt(50f, 48f),
+                    pt(82f, 64f), pt(80f, 84f), pt(50f, 94f),
+                    pt(20f, 84f), pt(18f, 64f), pt(50f, 48f)
+                )
+            ),
+            "8 center start"
+        )
+        // Digit 8: 2-stroke (top circle + bottom circle)
+        assertRecognizesDigit(
+            8,
+            listOf(
+                listOf(
+                    pt(50f, 8f), pt(22f, 16f), pt(22f, 34f),
+                    pt(50f, 46f), pt(78f, 34f), pt(78f, 16f), pt(50f, 8f)
+                ),
+                listOf(
+                    pt(50f, 46f), pt(18f, 64f), pt(20f, 84f),
+                    pt(50f, 94f), pt(80f, 84f), pt(82f, 64f), pt(50f, 46f)
+                )
+            ),
+            "8 2-stroke"
+        )
 
         // Digit 9: top loop + straight right stem
         assertRecognizesDigit(

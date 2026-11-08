@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -182,20 +184,45 @@ fun PracticeScreen(
                 Column(
                     modifier = mod,
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     // Precompute Candidates Button + Candidate Digit Filter Bar (1-9)
                     PrecomputeAndFilterBar(
                         candidatesPrecomputed = board.candidatesPrecomputed,
                         filterDigit = state.filterDigit,
+                        isLandscape = isLandscapeTablet,
                         onPrecomputeCandidates = onPrecomputeCandidates,
                         onToggleFilterDigit = onToggleFilterDigit
                     )
 
-                    Box(
-                        modifier = Modifier.weight(1f, fill = false),
-                        contentAlignment = Alignment.Center
-                    ) {
+                    if (isLandscapeTablet) {
+                        BoxWithConstraints(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxWidth()
+                                .padding(bottom = 8.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            val boardSize = minOf(maxWidth, maxHeight)
+                            SudokuBoardCanvas(
+                                board = board,
+                                activeCell = state.activeCell,
+                                filterDigit = state.filterDigit,
+                                inkMode = state.inkMode,
+                                stylusOnlyPalmRejection = state.stylusOnlyPalmRejection,
+                                highlightedPatternCells = highlightedPatternCells,
+                                pivotCell = highlightedPivot,
+                                highlightedEliminations = highlightedElims,
+                                visualLinks = visualLinks,
+                                readOnly = false,
+                                onSelectCell = onSelectCell,
+                                onTogglePatternCell = onTogglePatternCell,
+                                onToggleCandidate = onToggleCandidate,
+                                onRecognizedInCellInk = { cell, res -> onHandwritingRecognized(cell, res) },
+                                modifier = Modifier.size(boardSize)
+                            )
+                        }
+                    } else {
                         SudokuBoardCanvas(
                             board = board,
                             activeCell = state.activeCell,
@@ -211,7 +238,7 @@ fun PracticeScreen(
                             onTogglePatternCell = onTogglePatternCell,
                             onToggleCandidate = onToggleCandidate,
                             onRecognizedInCellInk = { cell, res -> onHandwritingRecognized(cell, res) },
-                            modifier = Modifier.fillMaxSize()
+                            modifier = Modifier.fillMaxWidth()
                         )
                     }
                 }
@@ -308,6 +335,7 @@ fun PracticeScreen(
 private fun PrecomputeAndFilterBar(
     candidatesPrecomputed: Boolean,
     filterDigit: Int?,
+    isLandscape: Boolean,
     onPrecomputeCandidates: () -> Unit,
     onToggleFilterDigit: (Int) -> Unit
 ) {
@@ -317,60 +345,117 @@ private fun PrecomputeAndFilterBar(
         colors = CardDefaults.cardColors(containerColor = Color.White),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
-        Column(
-            modifier = Modifier.padding(10.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
+        if (isLandscape) {
+            // Sleek single-row layout in landscape to preserve vertical height for the board
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Button(
                     onClick = onPrecomputeCandidates,
+                    modifier = Modifier.height(34.dp),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = if (candidatesPrecomputed) Color(0xFF0D9488) else Color(0xFF2563EB)
                     )
                 ) {
                     Text(
-                        text = if (candidatesPrecomputed) "↻ Re-Precompute Candidates" else "⚡ Precompute All Candidates",
+                        text = if (candidatesPrecomputed) "↻ Candidates" else "⚡ Candidates",
+                        fontSize = 12.sp,
                         fontWeight = FontWeight.Bold
                     )
                 }
 
-                Text(
-                    text = if (filterDigit != null) "Filtering Digit $filterDigit" else "Highlight Candidate (1-9):",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = Color(0xFF475569),
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                for (d in 1..9) {
-                    val isSelected = filterDigit == d
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(36.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(if (isSelected) Color(0xFF0284C7) else Color(0xFFF1F5F9))
-                            .border(
-                                width = 1.5.dp,
-                                color = if (isSelected) Color(0xFF0369A1) else Color(0xFFCBD5E1),
-                                shape = RoundedCornerShape(8.dp)
+                Row(
+                    modifier = Modifier.weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    for (d in 1..9) {
+                        val isSelected = filterDigit == d
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(34.dp)
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(if (isSelected) Color(0xFF0284C7) else Color(0xFFF1F5F9))
+                                .border(
+                                    width = 1.5.dp,
+                                    color = if (isSelected) Color(0xFF0369A1) else Color(0xFFCBD5E1),
+                                    shape = RoundedCornerShape(6.dp)
+                                )
+                                .clickable { onToggleFilterDigit(d) },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = d.toString(),
+                                fontWeight = FontWeight.ExtraBold,
+                                fontSize = 13.sp,
+                                color = if (isSelected) Color.White else Color(0xFF1E293B)
                             )
-                            .clickable { onToggleFilterDigit(d) },
-                        contentAlignment = Alignment.Center
+                        }
+                    }
+                }
+            }
+        } else {
+            Column(
+                modifier = Modifier.padding(10.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Button(
+                        onClick = onPrecomputeCandidates,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (candidatesPrecomputed) Color(0xFF0D9488) else Color(0xFF2563EB)
+                        )
                     ) {
                         Text(
-                            text = d.toString(),
-                            fontWeight = FontWeight.ExtraBold,
-                            color = if (isSelected) Color.White else Color(0xFF1E293B)
+                            text = if (candidatesPrecomputed) "↻ Re-Precompute Candidates" else "⚡ Precompute All Candidates",
+                            fontWeight = FontWeight.Bold
                         )
+                    }
+
+                    Text(
+                        text = if (filterDigit != null) "Filtering Digit $filterDigit" else "Highlight Candidate (1-9):",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = Color(0xFF475569),
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    for (d in 1..9) {
+                        val isSelected = filterDigit == d
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(36.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (isSelected) Color(0xFF0284C7) else Color(0xFFF1F5F9))
+                                .border(
+                                    width = 1.5.dp,
+                                    color = if (isSelected) Color(0xFF0369A1) else Color(0xFFCBD5E1),
+                                    shape = RoundedCornerShape(8.dp)
+                                )
+                                .clickable { onToggleFilterDigit(d) },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = d.toString(),
+                                fontWeight = FontWeight.ExtraBold,
+                                color = if (isSelected) Color.White else Color(0xFF1E293B)
+                            )
+                        }
                     }
                 }
             }
