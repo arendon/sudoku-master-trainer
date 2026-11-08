@@ -82,13 +82,15 @@ fun SudokuBoardCanvas(
     val completedStrokes = remember { mutableStateListOf<List<InkPoint>>() }
     val currentStroke = remember { mutableStateListOf<InkPoint>() }
     var lastStrokeUpTimestamp by remember { mutableLongStateOf(0L) }
+    var isDrawingInCell by remember { mutableStateOf(false) }
 
     // Recognize multi-stroke handwritten digit after a brief pause
-    LaunchedEffect(lastStrokeUpTimestamp) {
-        if (lastStrokeUpTimestamp > 0L && completedStrokes.isNotEmpty()) {
-            delay(520L)
+    LaunchedEffect(lastStrokeUpTimestamp, isDrawingInCell) {
+        if (!isDrawingInCell && lastStrokeUpTimestamp > 0L && completedStrokes.isNotEmpty()) {
+            val waitMs = if (DigitStrokeRecognizer.mayExpectAdditionalStroke(completedStrokes.toList())) 680L else 460L
+            delay(waitMs)
             val targetCell = drawingCell
-            if (targetCell != null && currentStroke.isEmpty() && completedStrokes.isNotEmpty()) {
+            if (!isDrawingInCell && targetCell != null && currentStroke.isEmpty() && completedStrokes.isNotEmpty()) {
                 val result = DigitStrokeRecognizer.recognize(completedStrokes.toList())
                 completedStrokes.clear()
                 drawingCell = null
@@ -141,20 +143,38 @@ fun SudokuBoardCanvas(
                                 return if (r in 0..8 && c in 0..8) CellPos(r, c) else null
                             }
 
+                            fun isNearCell(pt: Offset, target: CellPos): Boolean {
+                                val left = gutter + target.col * cellSize - cellSize * 0.35f
+                                val right = gutter + (target.col + 1) * cellSize + cellSize * 0.35f
+                                val top = gutter + target.row * cellSize - cellSize * 0.35f
+                                val bottom = gutter + (target.row + 1) * cellSize + cellSize * 0.35f
+                                return pt.x in left..right && pt.y in top..bottom
+                            }
+
                             when (event.type) {
                                 PointerEventType.Press -> {
-                                    val cell = offsetToCell(change.position)
-                                    if (cell != null) {
+                                    val rawCell = offsetToCell(change.position)
+                                    val existingDrawCell = drawingCell
+                                    val effectiveCell = if (existingDrawCell != null &&
+                                        completedStrokes.isNotEmpty() &&
+                                        isNearCell(change.position, existingDrawCell)
+                                    ) {
+                                        existingDrawCell
+                                    } else {
+                                        rawCell
+                                    }
+
+                                    if (effectiveCell != null) {
                                         downPos = change.position
-                                        downCell = cell
+                                        downCell = effectiveCell
                                         isDraggingStroke = false
-                                        if (drawingCell != null && drawingCell != cell && completedStrokes.isNotEmpty()) {
+                                        if (existingDrawCell != null && existingDrawCell != effectiveCell && completedStrokes.isNotEmpty()) {
                                             // Flush previous cell ink immediately
                                             val prevResult = DigitStrokeRecognizer.recognize(completedStrokes.toList())
-                                            val prevCell = drawingCell!!
                                             completedStrokes.clear()
+                                            drawingCell = null
                                             if (prevResult !is RecognizedInkResult.Unrecognized) {
-                                                onRecognizedInCellInk(prevCell, prevResult)
+                                                onRecognizedInCellInk(existingDrawCell, prevResult)
                                             }
                                         }
                                         currentStroke.clear()
@@ -173,7 +193,10 @@ fun SudokuBoardCanvas(
                                         ).toFloat()
                                         if (dist > cellSize * 0.14f && inkMode != InkInputMode.SELECT_PATTERN) {
                                             isDraggingStroke = true
-                                            drawingCell = cell
+                                            isDrawingInCell = true
+                                            if (drawingCell == null) {
+                                                drawingCell = cell
+                                            }
                                         }
                                         currentStroke.add(InkPoint(change.position.x, change.position.y))
                                         change.consume()
@@ -183,15 +206,26 @@ fun SudokuBoardCanvas(
                                 PointerEventType.Release -> {
                                     val cell = downCell
                                     val releasePos = change.position
+                                    isDrawingInCell = false
                                     if (cell != null) {
                                         if (change.type == PointerType.Eraser) {
                                             onSelectCell(cell)
                                             onRecognizedInCellInk(cell, RecognizedInkResult.Erase)
                                             currentStroke.clear()
                                         } else if (isDraggingStroke && inkMode != InkInputMode.SELECT_PATTERN) {
-                                            onSelectCell(cell)
                                             if (currentStroke.size >= 2) {
-                                                completedStrokes.add(currentStroke.toList())
+                                                val strokeCopy = currentStroke.toList()
+                                                if (completedStrokes.isEmpty()) {
+                                                    // Resolve target cell from the centroid of the first stroke
+                                                    val avgX = strokeCopy.map { it.x }.average().toFloat()
+                                                    val avgY = strokeCopy.map { it.y }.average().toFloat()
+                                                    val centroidCell = offsetToCell(Offset(avgX, avgY)) ?: cell
+                                                    drawingCell = centroidCell
+                                                    onSelectCell(centroidCell)
+                                                } else {
+                                                    onSelectCell(drawingCell ?: cell)
+                                                }
+                                                completedStrokes.add(strokeCopy)
                                                 lastStrokeUpTimestamp = System.currentTimeMillis()
                                             }
                                             currentStroke.clear()

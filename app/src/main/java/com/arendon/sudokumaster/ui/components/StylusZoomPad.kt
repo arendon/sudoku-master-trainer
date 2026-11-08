@@ -74,7 +74,8 @@ fun StylusZoomPad(
 
     LaunchedEffect(lastStrokeTimestamp, isDrawingNow) {
         if (!isDrawingNow && lastStrokeTimestamp > 0L && completedStrokes.isNotEmpty()) {
-            delay(500L)
+            val waitMs = if (DigitStrokeRecognizer.mayExpectAdditionalStroke(completedStrokes.toList())) 680L else 460L
+            delay(waitMs)
             if (!isDrawingNow && completedStrokes.isNotEmpty()) {
                 val result = DigitStrokeRecognizer.recognize(completedStrokes.toList())
                 completedStrokes.clear()
