@@ -1,0 +1,511 @@
+package com.arendon.sudokumaster.ui.components
+
+import android.graphics.Paint
+import android.graphics.Typeface
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.PointerType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.unit.dp
+import com.arendon.sudokumaster.domain.handwriting.DigitStrokeRecognizer
+import com.arendon.sudokumaster.domain.handwriting.InkPoint
+import com.arendon.sudokumaster.domain.handwriting.RecognizedInkResult
+import com.arendon.sudokumaster.domain.model.CandidateElimination
+import com.arendon.sudokumaster.domain.model.CellPos
+import com.arendon.sudokumaster.domain.model.InkInputMode
+import com.arendon.sudokumaster.domain.model.LinkType
+import com.arendon.sudokumaster.domain.model.PatternLink
+import com.arendon.sudokumaster.domain.model.SudokuBoard
+import kotlinx.coroutines.delay
+import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.hypot
+import kotlin.math.sin
+
+/**
+ * Interactive 9x9 Sudoku canvas supporting:
+ * - R1..R9 and C1..C9 coordinate gutters
+ * - 3x3 candidate note mini-grids per empty cell
+ * - Candidate digit filtering (1..9)
+ * - Step 1 Pattern Cell selection & Pivot highlighting
+ * - Visual deduction links (Strong, Weak, Wing Bridge, Elimination Ray)
+ * - Target candidate elimination badges
+ * - Direct in-cell stylus handwriting recognition (with optional Stylus-Only Palm Rejection)
+ */
+@Composable
+fun SudokuBoardCanvas(
+    board: SudokuBoard,
+    activeCell: CellPos?,
+    filterDigit: Int?,
+    inkMode: InkInputMode,
+    stylusOnlyPalmRejection: Boolean,
+    highlightedPatternCells: Set<CellPos> = emptySet(),
+    pivotCell: CellPos? = null,
+    highlightedEliminations: Set<CandidateElimination> = emptySet(),
+    visualLinks: List<PatternLink> = emptyList(),
+    readOnly: Boolean = false,
+    onSelectCell: (CellPos) -> Unit = {},
+    onTogglePatternCell: (CellPos) -> Unit = {},
+    onToggleCandidate: (CellPos, Int) -> Unit = { _, _ -> },
+    onRecognizedInCellInk: (CellPos, RecognizedInkResult) -> Unit = { _, _ -> },
+    modifier: Modifier = Modifier
+) {
+    // Active in-cell handwriting state
+    var drawingCell by remember { mutableStateOf<CellPos?>(null) }
+    val completedStrokes = remember { mutableStateListOf<List<InkPoint>>() }
+    val currentStroke = remember { mutableStateListOf<InkPoint>() }
+    var lastStrokeUpTimestamp by remember { mutableLongStateOf(0L) }
+
+    // Recognize multi-stroke handwritten digit after a brief pause
+    LaunchedEffect(lastStrokeUpTimestamp) {
+        if (lastStrokeUpTimestamp > 0L && completedStrokes.isNotEmpty()) {
+            delay(520L)
+            val targetCell = drawingCell
+            if (targetCell != null && currentStroke.isEmpty() && completedStrokes.isNotEmpty()) {
+                val result = DigitStrokeRecognizer.recognize(completedStrokes.toList())
+                completedStrokes.clear()
+                drawingCell = null
+                if (result !is RecognizedInkResult.Unrecognized) {
+                    onRecognizedInCellInk(targetCell, result)
+                }
+            }
+        }
+    }
+
+    Box(
+        modifier = modifier
+            .aspectRatio(1f)
+            .clip(RoundedCornerShape(12.dp))
+            .background(Color.White)
+            .border(2.dp, Color(0xFF1E293B), RoundedCornerShape(12.dp))
+            .padding(4.dp)
+    ) {
+        Canvas(
+            modifier = Modifier
+                .fillMaxSize()
+                .pointerInput(readOnly, inkMode, stylusOnlyPalmRejection, board) {
+                    if (readOnly) return@pointerInput
+
+                    awaitPointerEventScope {
+                        var downPos: Offset? = null
+                        var downCell: CellPos? = null
+                        var isDraggingStroke = false
+
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            val change = event.changes.firstOrNull() ?: continue
+
+                            // Palm rejection: when enabled, ignore non-stylus touch events
+                            if (stylusOnlyPalmRejection &&
+                                change.type != PointerType.Stylus &&
+                                change.type != PointerType.Eraser
+                            ) {
+                                continue
+                            }
+
+                            val gutter = size.width * 0.055f
+                            val gridSize = size.width - gutter
+                            val cellSize = gridSize / 9f
+
+                            fun offsetToCell(pt: Offset): CellPos? {
+                                if (pt.x < gutter || pt.y < gutter) return null
+                                val c = ((pt.x - gutter) / cellSize).toInt()
+                                val r = ((pt.y - gutter) / cellSize).toInt()
+                                return if (r in 0..8 && c in 0..8) CellPos(r, c) else null
+                            }
+
+                            when (event.type) {
+                                PointerEventType.Press -> {
+                                    val cell = offsetToCell(change.position)
+                                    if (cell != null) {
+                                        downPos = change.position
+                                        downCell = cell
+                                        isDraggingStroke = false
+                                        if (drawingCell != null && drawingCell != cell && completedStrokes.isNotEmpty()) {
+                                            // Flush previous cell ink immediately
+                                            val prevResult = DigitStrokeRecognizer.recognize(completedStrokes.toList())
+                                            val prevCell = drawingCell!!
+                                            completedStrokes.clear()
+                                            if (prevResult !is RecognizedInkResult.Unrecognized) {
+                                                onRecognizedInCellInk(prevCell, prevResult)
+                                            }
+                                        }
+                                        currentStroke.clear()
+                                        currentStroke.add(InkPoint(change.position.x, change.position.y))
+                                        change.consume()
+                                    }
+                                }
+
+                                PointerEventType.Move -> {
+                                    val start = downPos
+                                    val cell = downCell
+                                    if (start != null && cell != null && change.pressed) {
+                                        val dist = hypot(
+                                            (change.position.x - start.x).toDouble(),
+                                            (change.position.y - start.y).toDouble()
+                                        ).toFloat()
+                                        if (dist > cellSize * 0.14f && inkMode != InkInputMode.SELECT_PATTERN) {
+                                            isDraggingStroke = true
+                                            drawingCell = cell
+                                        }
+                                        currentStroke.add(InkPoint(change.position.x, change.position.y))
+                                        change.consume()
+                                    }
+                                }
+
+                                PointerEventType.Release -> {
+                                    val cell = downCell
+                                    val releasePos = change.position
+                                    if (cell != null) {
+                                        if (change.type == PointerType.Eraser) {
+                                            onSelectCell(cell)
+                                            onRecognizedInCellInk(cell, RecognizedInkResult.Erase)
+                                            currentStroke.clear()
+                                        } else if (isDraggingStroke && inkMode != InkInputMode.SELECT_PATTERN) {
+                                            onSelectCell(cell)
+                                            if (currentStroke.size >= 2) {
+                                                completedStrokes.add(currentStroke.toList())
+                                                lastStrokeUpTimestamp = System.currentTimeMillis()
+                                            }
+                                            currentStroke.clear()
+                                        } else {
+                                            // Clean tap inside cell
+                                            currentStroke.clear()
+                                            onSelectCell(cell)
+                                            when (inkMode) {
+                                                InkInputMode.SELECT_PATTERN -> {
+                                                    onTogglePatternCell(cell)
+                                                }
+                                                InkInputMode.CANDIDATE_NOTE -> {
+                                                    // Determine which mini-grid candidate (1..9) was tapped inside the cell
+                                                    val cellLeft = gutter + cell.col * cellSize
+                                                    val cellTop = gutter + cell.row * cellSize
+                                                    val subCol = (((releasePos.x - cellLeft) / (cellSize / 3f)).toInt()).coerceIn(0, 2)
+                                                    val subRow = (((releasePos.y - cellTop) / (cellSize / 3f)).toInt()).coerceIn(0, 2)
+                                                    val tappedDigit = subRow * 3 + subCol + 1
+                                                    onToggleCandidate(cell, tappedDigit)
+                                                }
+                                                InkInputMode.FINAL_DIGIT -> {
+                                                    // Selects cell so user can also write in Zoom Pad
+                                                }
+                                            }
+                                        }
+                                    }
+                                    downPos = null
+                                    downCell = null
+                                    isDraggingStroke = false
+                                    change.consume()
+                                }
+                            }
+                        }
+                    }
+                }
+        ) {
+            val gutter = size.width * 0.055f
+            val gridSize = size.width - gutter
+            val cellSize = gridSize / 9f
+
+            val elimLookup = highlightedEliminations.groupBy({ it.cell }, { it.digit })
+            val allPatternHighlighted = board.selectedPatternCells union highlightedPatternCells
+
+            // 1. Draw coordinate headers (C1..C9, R1..R9)
+            val headerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = android.graphics.Color.parseColor("#64748B")
+                textSize = gutter * 0.58f
+                textAlign = Paint.Align.CENTER
+                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            }
+            for (i in 0..8) {
+                val cx = gutter + (i + 0.5f) * cellSize
+                val cy = gutter * 0.68f
+                drawContext.canvas.nativeCanvas.drawText("C${i + 1}", cx, cy, headerPaint)
+
+                val rx = gutter * 0.48f
+                val ry = gutter + (i + 0.5f) * cellSize + headerPaint.textSize * 0.35f
+                drawContext.canvas.nativeCanvas.drawText("R${i + 1}", rx, ry, headerPaint)
+            }
+
+            // 2. Draw cell backgrounds (peer shading, filter shading, pattern cells, pivot, active cell)
+            for (r in 0..8) {
+                for (c in 0..8) {
+                    val pos = CellPos(r, c)
+                    val left = gutter + c * cellSize
+                    val top = gutter + r * cellSize
+
+                    val hasFilteredCandidate = filterDigit != null &&
+                        (board.digitAt(pos) == filterDigit || filterDigit in board.candidatesAt(pos))
+
+                    val bgColor = when {
+                        pos == pivotCell -> Color(0xFFFEF3C7) // Warm Gold for Pivot
+                        pos in allPatternHighlighted -> Color(0xFFD1FAE5) // Emerald tint for Pattern Defining Cells
+                        pos == activeCell -> Color(0xFFDBEAFE) // Active selected cell
+                        hasFilteredCandidate -> Color(0xFFE0F2FE) // Candidate filter highlight
+                        activeCell != null && pos.isPeerOf(activeCell) -> Color(0xFFF1F5F9)
+                        else -> Color.White
+                    }
+
+                    drawRect(
+                        color = bgColor,
+                        topLeft = Offset(left, top),
+                        size = Size(cellSize, cellSize)
+                    )
+
+                    // Draw distinct border around Pattern Defining Cells
+                    if (pos in allPatternHighlighted) {
+                        val borderColor = if (pos == pivotCell) Color(0xFFD97706) else Color(0xFF059669)
+                        drawRoundRect(
+                            color = borderColor,
+                            topLeft = Offset(left + 2f, top + 2f),
+                            size = Size(cellSize - 4f, cellSize - 4f),
+                            cornerRadius = CornerRadius(6f, 6f),
+                            style = Stroke(width = 3.2f)
+                        )
+                    } else if (pos == activeCell) {
+                        drawRect(
+                            color = Color(0xFF2563EB),
+                            topLeft = Offset(left + 1.5f, top + 1.5f),
+                            size = Size(cellSize - 3f, cellSize - 3f),
+                            style = Stroke(width = 2.8f)
+                        )
+                    }
+                }
+            }
+
+            // 3. Draw grid lines (thin cell lines, thick 3x3 box borders)
+            for (i in 0..9) {
+                val offset = gutter + i * cellSize
+                val isMajor = i % 3 == 0
+                val strokeWidth = if (isMajor) 3.5f else 1.1f
+                val lineColor = if (isMajor) Color(0xFF0F172A) else Color(0xFFCBD5E1)
+
+                // Vertical line
+                drawLine(
+                    color = lineColor,
+                    start = Offset(offset, gutter),
+                    end = Offset(offset, gutter + gridSize),
+                    strokeWidth = strokeWidth
+                )
+                // Horizontal line
+                drawLine(
+                    color = lineColor,
+                    start = Offset(gutter, offset),
+                    end = Offset(gutter + gridSize, offset),
+                    strokeWidth = strokeWidth
+                )
+            }
+
+            // 4. Draw Visual Pattern Links (Walkthrough Step 2/3 & Hint Stage 3)
+            for (link in visualLinks) {
+                val startCenter = Offset(
+                    x = gutter + (link.from.col + 0.5f) * cellSize,
+                    y = gutter + (link.from.row + 0.5f) * cellSize
+                )
+                val endCenter = Offset(
+                    x = gutter + (link.to.col + 0.5f) * cellSize,
+                    y = gutter + (link.to.row + 0.5f) * cellSize
+                )
+
+                val linkColor = when (link.linkType) {
+                    LinkType.STRONG -> Color(0xFF059669)
+                    LinkType.WEAK -> Color(0xFF2563EB)
+                    LinkType.WING_BRIDGE -> Color(0xFFD97706)
+                    LinkType.ELIMINATION_RAY -> Color(0xFFDC2626)
+                }
+
+                val pathEffect = when (link.linkType) {
+                    LinkType.STRONG, LinkType.WING_BRIDGE -> null
+                    LinkType.WEAK, LinkType.ELIMINATION_RAY ->
+                        PathEffect.dashPathEffect(floatArrayOf(12f, 8f), 0f)
+                }
+
+                drawLine(
+                    color = linkColor.copy(alpha = 0.78f),
+                    start = startCenter,
+                    end = endCenter,
+                    strokeWidth = 4.2f,
+                    cap = StrokeCap.Round,
+                    pathEffect = pathEffect
+                )
+
+                // Draw arrowhead at endCenter
+                val angle = atan2(
+                    (endCenter.y - startCenter.y).toDouble(),
+                    (endCenter.x - startCenter.x).toDouble()
+                ).toFloat()
+                val arrowRadius = cellSize * 0.16f
+                val tip = Offset(
+                    x = endCenter.x - cos(angle) * (cellSize * 0.18f),
+                    y = endCenter.y - sin(angle) * (cellSize * 0.18f)
+                )
+                val arrowPath = Path().apply {
+                    moveTo(tip.x, tip.y)
+                    lineTo(
+                        tip.x - arrowRadius * cos(angle - 0.5f),
+                        tip.y - arrowRadius * sin(angle - 0.5f)
+                    )
+                    lineTo(
+                        tip.x - arrowRadius * cos(angle + 0.5f),
+                        tip.y - arrowRadius * sin(angle + 0.5f)
+                    )
+                    close()
+                }
+                drawPath(arrowPath, color = linkColor.copy(alpha = 0.88f))
+            }
+
+            // 5. Draw Given Digits, User Digits, and 3x3 Candidate Mini-Grids
+            val givenPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = android.graphics.Color.parseColor("#0F172A")
+                textSize = cellSize * 0.62f
+                textAlign = Paint.Align.CENTER
+                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            }
+            val userDigitPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = android.graphics.Color.parseColor("#1D4ED8")
+                textSize = cellSize * 0.62f
+                textAlign = Paint.Align.CENTER
+                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            }
+            val wrongUserDigitPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = android.graphics.Color.parseColor("#DC2626")
+                textSize = cellSize * 0.62f
+                textAlign = Paint.Align.CENTER
+                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            }
+
+            val candNormalPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = android.graphics.Color.parseColor("#334155")
+                textSize = cellSize * 0.25f
+                textAlign = Paint.Align.CENTER
+                typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
+            }
+            val candBoldPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = android.graphics.Color.parseColor("#0F172A")
+                textSize = cellSize * 0.27f
+                textAlign = Paint.Align.CENTER
+                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            }
+            val candElimPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = android.graphics.Color.parseColor("#FFFFFF")
+                textSize = cellSize * 0.25f
+                textAlign = Paint.Align.CENTER
+                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            }
+
+            for (r in 0..8) {
+                for (c in 0..8) {
+                    val pos = CellPos(r, c)
+                    val left = gutter + c * cellSize
+                    val top = gutter + r * cellSize
+                    val digit = board.digitAt(pos)
+
+                    if (digit != 0) {
+                        val cx = left + cellSize * 0.5f
+                        val cy = top + cellSize * 0.5f + givenPaint.textSize * 0.36f
+                        val paint = when {
+                            board.isGiven(pos) -> givenPaint
+                            digit == board.solutionDigits[r][c] -> userDigitPaint
+                            else -> wrongUserDigitPaint
+                        }
+                        drawContext.canvas.nativeCanvas.drawText(digit.toString(), cx, cy, paint)
+                    } else {
+                        val cands = board.candidatesAt(pos)
+                        val targetElimDigits = elimLookup[pos]?.toSet() ?: emptySet()
+                        val subSize = cellSize / 3f
+
+                        for (d in 1..9) {
+                            val isPresent = d in cands
+                            val isTargetElim = d in targetElimDigits
+                            if (!isPresent && !isTargetElim) continue
+
+                            val subR = (d - 1) / 3
+                            val subC = (d - 1) % 3
+                            val subCenterX = left + (subC + 0.5f) * subSize
+                            val subCenterY = top + (subR + 0.5f) * subSize
+
+                            if (isTargetElim) {
+                                // Crimson target elimination pill + strike-through
+                                drawCircle(
+                                    color = Color(0xFFDC2626),
+                                    radius = subSize * 0.44f,
+                                    center = Offset(subCenterX, subCenterY)
+                                )
+                                drawContext.canvas.nativeCanvas.drawText(
+                                    d.toString(),
+                                    subCenterX,
+                                    subCenterY + candElimPaint.textSize * 0.35f,
+                                    candElimPaint
+                                )
+                            } else if (filterDigit == d) {
+                                // Highlighted candidate badge
+                                drawCircle(
+                                    color = Color(0xFF38BDF8).copy(alpha = 0.45f),
+                                    radius = subSize * 0.44f,
+                                    center = Offset(subCenterX, subCenterY)
+                                )
+                                drawContext.canvas.nativeCanvas.drawText(
+                                    d.toString(),
+                                    subCenterX,
+                                    subCenterY + candBoldPaint.textSize * 0.35f,
+                                    candBoldPaint
+                                )
+                            } else {
+                                val paint = if (pos in allPatternHighlighted) candBoldPaint else candNormalPaint
+                                drawContext.canvas.nativeCanvas.drawText(
+                                    d.toString(),
+                                    subCenterX,
+                                    subCenterY + paint.textSize * 0.35f,
+                                    paint
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 6. Render live stylus ink strokes in progress
+            val allLiveStrokes = completedStrokes.toList() + listOf(currentStroke.toList())
+            for (stroke in allLiveStrokes) {
+                if (stroke.size >= 2) {
+                    val path = Path().apply {
+                        moveTo(stroke.first().x, stroke.first().y)
+                        for (i in 1 until stroke.size) {
+                            lineTo(stroke[i].x, stroke[i].y)
+                        }
+                    }
+                    drawPath(
+                        path = path,
+                        color = Color(0xFF7C3AED),
+                        style = Stroke(width = 5.5f, cap = StrokeCap.Round, join = StrokeJoin.Round)
+                    )
+                }
+            }
+        }
+    }
+}
