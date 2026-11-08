@@ -8,6 +8,7 @@ import com.arendon.sudokumaster.data.local.ExerciseProgressEntity
 import com.arendon.sudokumaster.data.local.PatternMasterySummary
 import com.arendon.sudokumaster.data.local.ProgressRepository
 import com.arendon.sudokumaster.data.local.SudokuDatabase
+import com.arendon.sudokumaster.data.local.completionStatus
 import com.arendon.sudokumaster.domain.handwriting.RecognizedInkResult
 import com.arendon.sudokumaster.domain.model.CellPos
 import com.arendon.sudokumaster.domain.model.Exercise

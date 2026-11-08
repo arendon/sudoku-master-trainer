@@ -22,11 +22,11 @@ data class ExerciseProgressEntity(
     val serializedEliminatedByUser: String,
     val serializedSelectedPatternCells: String,
     val updatedAtEpochMs: Long
-) {
-    val completionStatus: ExerciseCompletionStatus
-        get() = runCatching { ExerciseCompletionStatus.valueOf(status) }
-            .getOrDefault(ExerciseCompletionStatus.UNSTARTED)
-}
+)
+
+val ExerciseProgressEntity.completionStatus: ExerciseCompletionStatus
+    get() = runCatching { ExerciseCompletionStatus.valueOf(status) }
+        .getOrDefault(ExerciseCompletionStatus.UNSTARTED)
 
 @Entity(tableName = "pattern_exercise_counts")
 data class PatternExerciseCountEntity(

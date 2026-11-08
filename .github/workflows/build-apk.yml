@@ -1,0 +1,41 @@
+name: Build & Verify Sudoku Master Trainer APK
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Run 5-Invariant Mathematical Verification Tests & Build Debug APK
+        run: gradle test assembleDebug --stacktrace
+
+      - name: Prepare APK Artifact
+        run: cp app/build/outputs/apk/debug/app-debug.apk SudokuMasterTrainer.apk
+
+      - name: Upload SudokuMasterTrainer.apk
+        uses: actions/upload-artifact@v4
+        with:
+          name: SudokuMasterTrainer-apk
+          path: SudokuMasterTrainer.apk
+          if-no-files-found: error

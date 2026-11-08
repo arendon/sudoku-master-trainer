@@ -47,6 +47,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.arendon.sudokumaster.data.local.ExerciseCompletionStatus
 import com.arendon.sudokumaster.data.local.ExerciseProgressEntity
+import com.arendon.sudokumaster.data.local.completionStatus
 import com.arendon.sudokumaster.domain.model.Exercise
 import com.arendon.sudokumaster.domain.model.InkInputMode
 import com.arendon.sudokumaster.domain.model.PatternType
