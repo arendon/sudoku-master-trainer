@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.arendon.sudokumaster.domain.handwriting.DigitStrokeRecognizer
 import com.arendon.sudokumaster.domain.handwriting.InkPoint
+import com.arendon.sudokumaster.domain.handwriting.MlKitDigitRecognizer
 import com.arendon.sudokumaster.domain.handwriting.RecognizedInkResult
 import com.arendon.sudokumaster.domain.model.CellPos
 import com.arendon.sudokumaster.domain.model.InkInputMode
@@ -72,13 +73,18 @@ fun StylusZoomPad(
     var lastStrokeTimestamp by remember { mutableLongStateOf(0L) }
     var isDrawingNow by remember { mutableStateOf(false) }
 
+    LaunchedEffect(Unit) {
+        MlKitDigitRecognizer.warmupModelInBackground()
+    }
+
     LaunchedEffect(lastStrokeTimestamp, isDrawingNow) {
         if (!isDrawingNow && lastStrokeTimestamp > 0L && completedStrokes.isNotEmpty()) {
             val waitMs = if (DigitStrokeRecognizer.mayExpectAdditionalStroke(completedStrokes.toList())) 680L else 460L
             delay(waitMs)
             if (!isDrawingNow && completedStrokes.isNotEmpty()) {
-                val result = DigitStrokeRecognizer.recognize(completedStrokes.toList())
+                val snapshot = completedStrokes.toList()
                 completedStrokes.clear()
+                val result = MlKitDigitRecognizer.recognizeHybrid(snapshot)
                 onInkRecognized(result)
             }
         }

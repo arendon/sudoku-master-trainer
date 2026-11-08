@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build-apk:
@@ -27,15 +27,25 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Run 5-Invariant Mathematical Verification Tests & Build Debug APK
-        run: gradle test assembleDebug --stacktrace
+      - name: Run Verification Tests & Build Signed Release APK
+        run: gradle test assembleRelease --stacktrace
 
-      - name: Prepare APK Artifact
-        run: cp app/build/outputs/apk/debug/app-debug.apk SudokuMasterTrainer.apk
+      - name: Prepare Signed APK Artifact
+        run: cp app/build/outputs/apk/release/app-release.apk SudokuMasterTrainer.apk
 
-      - name: Upload SudokuMasterTrainer.apk
+      - name: Upload SudokuMasterTrainer.apk Workflow Artifact
         uses: actions/upload-artifact@v4
         with:
           name: SudokuMasterTrainer-apk
           path: SudokuMasterTrainer.apk
           if-no-files-found: error
+
+      - name: Publish Signed APK to GitHub Releases
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="v1.1.${{ github.run_number }}"
+          gh release create "$TAG" SudokuMasterTrainer.apk \
+            --title "Sudoku Master Trainer $TAG" \
+            --notes "Automated signed release build of Sudoku Master Trainer (commit ${{ github.sha }})." \
+            --latest

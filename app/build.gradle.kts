@@ -13,8 +13,8 @@ android {
         applicationId = "com.arendon.sudokumaster"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -22,8 +22,21 @@ android {
         }
     }
 
+    signingConfigs {
+        create("permanent") {
+            storeFile = file(System.getenv("SIGNING_STORE_FILE") ?: "keystore/sudoku-master.p12")
+            storePassword = System.getenv("SIGNING_STORE_PASSWORD") ?: "sudokumaster123"
+            keyAlias = System.getenv("SIGNING_KEY_ALIAS") ?: "sudoku_master"
+            keyPassword = System.getenv("SIGNING_KEY_PASSWORD") ?: "sudokumaster123"
+        }
+    }
+
     buildTypes {
+        debug {
+            signingConfig = signingConfigs.getByName("permanent")
+        }
         release {
+            signingConfig = signingConfigs.getByName("permanent")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -59,6 +72,8 @@ dependencies {
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)
     implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.kotlinx.coroutines.play.services)
+    implementation(libs.mlkit.digital.ink)
 
     testImplementation(libs.junit)
     debugImplementation(libs.androidx.ui.tooling)

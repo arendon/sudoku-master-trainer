@@ -36,6 +36,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import com.arendon.sudokumaster.domain.handwriting.DigitStrokeRecognizer
 import com.arendon.sudokumaster.domain.handwriting.InkPoint
+import com.arendon.sudokumaster.domain.handwriting.MlKitDigitRecognizer
 import com.arendon.sudokumaster.domain.handwriting.RecognizedInkResult
 import com.arendon.sudokumaster.domain.model.CandidateElimination
 import com.arendon.sudokumaster.domain.model.CellPos
@@ -91,9 +92,10 @@ fun SudokuBoardCanvas(
             delay(waitMs)
             val targetCell = drawingCell
             if (!isDrawingInCell && targetCell != null && currentStroke.isEmpty() && completedStrokes.isNotEmpty()) {
-                val result = DigitStrokeRecognizer.recognize(completedStrokes.toList())
+                val snapshot = completedStrokes.toList()
                 completedStrokes.clear()
                 drawingCell = null
+                val result = MlKitDigitRecognizer.recognizeHybrid(snapshot)
                 if (result !is RecognizedInkResult.Unrecognized) {
                     onRecognizedInCellInk(targetCell, result)
                 }

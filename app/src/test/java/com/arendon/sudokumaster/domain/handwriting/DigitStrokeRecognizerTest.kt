@@ -142,6 +142,28 @@ class DigitStrokeRecognizerTest {
             ),
             "6 classic"
         )
+        // Digit 6: high-closing loop (often confused with 8 if top-return isn't checked)
+        assertRecognizesDigit(
+            6,
+            listOf(
+                listOf(
+                    pt(82f, 8f), pt(35f, 22f), pt(15f, 50f), pt(20f, 82f),
+                    pt(52f, 95f), pt(85f, 78f), pt(82f, 52f), pt(48f, 44f), pt(18f, 56f)
+                )
+            ),
+            "6 high-closing loop"
+        )
+        // Digit 6: straighter diagonal stem into bottom loop
+        assertRecognizesDigit(
+            6,
+            listOf(
+                listOf(
+                    pt(62f, 8f), pt(22f, 55f), pt(18f, 78f), pt(48f, 94f),
+                    pt(82f, 78f), pt(64f, 52f), pt(24f, 60f)
+                )
+            ),
+            "6 diagonal stem"
+        )
 
         // Digit 7: 1-stroke plain
         assertRecognizesDigit(

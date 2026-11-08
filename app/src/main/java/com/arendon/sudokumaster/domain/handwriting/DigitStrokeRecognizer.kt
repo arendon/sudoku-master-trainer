@@ -75,7 +75,9 @@ object DigitStrokeRecognizer {
         val lowerRightDensity: Float,
         val topHalfAngularSweep: Float,
         val botHalfAngularSweep: Float,
-        val hasMiddleLeftCusp: Boolean
+        val hasMiddleLeftCusp: Boolean,
+        val upwardTravelInTopThird: Float,
+        val returnsToTopAfterBottom: Boolean
     )
 
     private val templates: List<DigitTemplate> by lazy { buildTemplates() }
@@ -354,6 +356,9 @@ object DigitStrokeRecognizer {
         var upperRightLen = 0f
         var lowerLeftLen = 0f
         var lowerRightLen = 0f
+        var upwardTopThirdDy = 0f
+        var reachedBottom = false
+        var returnsToTopAfterBottom = false
 
         for (stroke in strokes) {
             for (i in 1 until stroke.size) {
@@ -365,6 +370,17 @@ object DigitStrokeRecognizer {
                 val my = ((p0.y + p1.y) * 0.5f - minY) / h
                 val dx = abs(p1.x - p0.x)
                 val dy = abs(p1.y - p0.y)
+                val signedDy = p1.y - p0.y
+
+                if (my > 0.72f) {
+                    reachedBottom = true
+                } else if (reachedBottom && my < 0.33f) {
+                    returnsToTopAfterBottom = true
+                }
+
+                if (my < 0.36f && signedDy < 0f) {
+                    upwardTopThirdDy += (-signedDy) / h
+                }
 
                 if (mx < 0.42f && my in 0.10f..0.50f && dy >= dx * 0.7f) {
                     upperLeftVertLen += segLen
@@ -416,7 +432,7 @@ object DigitStrokeRecognizer {
         val hasMidHoriz = hasHorizontalRun(strokes, minX, minY, w, h, 0.32f, 0.72f, 0.38f)
         val hasBotHoriz = hasLeftToRightBottomRun(strokes, minX, minY, w, h)
 
-        val topSweep = computeAngularSweep(allPts, minX, minY, w, h, 0.0f, 0.56f)
+        val topSweep = computeAngularSweep(allPts, minX, minY, w, h, 0.0f, 0.44f)
         val botSweep = computeAngularSweep(allPts, minX, minY, w, h, 0.44f, 1.0f)
         val hasMiddleLeftCusp = detectMiddleLeftCusp(strokes, minX, minY, w, h)
 
@@ -447,7 +463,9 @@ object DigitStrokeRecognizer {
             lowerRightDensity = lowerRightLen / normLen,
             topHalfAngularSweep = topSweep,
             botHalfAngularSweep = botSweep,
-            hasMiddleLeftCusp = hasMiddleLeftCusp
+            hasMiddleLeftCusp = hasMiddleLeftCusp,
+            upwardTravelInTopThird = upwardTopThirdDy,
+            returnsToTopAfterBottom = returnsToTopAfterBottom
         )
     }
 
@@ -605,11 +623,17 @@ object DigitStrokeRecognizer {
             }
 
             6 -> {
-                // 6 has its loop in the bottom half, low upper-right density, ends in middle/bottom loop
-                if (f.botHalfAngularSweep > 3.6f && f.lowerLeftDensity > 0.16f && f.endY in 0.38f..0.88f) {
-                    adj += 0.22f
+                // 6 has its closed loop in the bottom half, never returns to the top third after reaching the bottom,
+                // and has almost no upward travel in the top third (unlike 8 and 9).
+                if (f.botHalfAngularSweep > 3.2f &&
+                    !f.returnsToTopAfterBottom &&
+                    f.upwardTravelInTopThird < 0.08f &&
+                    f.endY in 0.36f..0.88f
+                ) {
+                    adj += 0.28f
                 }
-                if (f.startY < 0.28f && f.upperRightDensity < 0.16f) adj += 0.08f
+                if (f.startY < 0.30f && f.lowerLeftDensity > 0.14f) adj += 0.08f
+                if (f.returnsToTopAfterBottom || f.upwardTravelInTopThird > 0.16f) adj -= 0.22f
                 if (f.endY > 0.90f && f.botHalfAngularSweep < 2.5f) adj -= 0.18f
             }
 
@@ -626,16 +650,24 @@ object DigitStrokeRecognizer {
             }
 
             8 -> {
-                if (f.topHalfAngularSweep > 3.0f && f.botHalfAngularSweep > 3.0f) {
+                // An 8 must close or form a loop in the top half (climbing upward in the top third or returning to top)
+                val hasTopLoopClosure = f.returnsToTopAfterBottom || f.upwardTravelInTopThird >= 0.14f || f.strokeCount >= 2
+                if (hasTopLoopClosure && f.topHalfAngularSweep > 2.8f && f.botHalfAngularSweep > 2.8f) {
                     adj += 0.24f
                 }
-                if (f.upperLeftVerticalDensity > 0.08f &&
+                if (hasTopLoopClosure &&
+                    f.upperLeftVerticalDensity > 0.08f &&
                     f.upperRightDensity > 0.14f &&
                     f.lowerLeftDensity > 0.14f &&
                     f.lowerRightDensity > 0.14f &&
-                    f.endY < 0.62f
+                    f.endY < 0.35f
                 ) {
                     adj += 0.14f
+                }
+                // Key disambiguator against '6': if a 1-stroke digit never returns to the top third and
+                // has no upward travel in the top third, it is an open-top '6', NOT an '8'!
+                if (!hasTopLoopClosure) {
+                    adj -= 0.32f
                 }
                 if (f.straightnessRatio < 1.85f) adj -= 0.20f
             }
