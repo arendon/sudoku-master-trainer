@@ -643,18 +643,17 @@ object DigitStrokeRecognizer {
             }
 
             6 -> {
-                // 6 has its closed loop in the bottom half and a single open downward/diagonal stroke in the top half
+                // 6 has bottom loop, single open stem in top half, never returns to top or climbs in top 1/3
                 if (f.botHalfAngularSweep > 3.0f &&
                     !f.returnsToTopAfterBottom &&
-                    f.upperRightDensity < 0.14f &&
+                    f.upwardTravelInTopThird < 0.08f &&
                     f.endY in 0.36f..0.88f
                 ) {
-                    adj += 0.24f
+                    adj += 0.28f
                 }
                 if (f.startY < 0.30f && f.lowerLeftDensity > 0.14f) adj += 0.08f
-                // If ink is present in all 4 quadrants including a full upper-right loop, it's an 8, not a 6
-                if (f.upperRightDensity > 0.18f && f.lowerRightDensity > 0.18f) {
-                    adj -= 0.24f
+                if (f.returnsToTopAfterBottom || f.upwardTravelInTopThird > 0.15f) {
+                    adj -= 0.25f
                 }
                 if (f.endY > 0.90f && f.botHalfAngularSweep < 2.5f) adj -= 0.18f
             }
@@ -672,25 +671,24 @@ object DigitStrokeRecognizer {
             }
 
             8 -> {
-                // An 8 has two loops: ink is distributed across all 4 quadrants (top-left, top-right, bottom-left, bottom-right)
-                val allQuadsPresent = f.upperRightDensity > 0.12f &&
-                    f.lowerRightDensity > 0.12f &&
-                    f.lowerLeftDensity > 0.12f &&
-                    (f.upperLeftVerticalDensity > 0.06f || f.topWidthRatio > 0.35f)
-
+                // 8 must close or form a top loop: climbing upward in top third or returning to top or 2-stroke
                 val hasTopLoopClosure = f.returnsToTopAfterBottom ||
-                    f.upwardTravelInTopThird >= 0.10f ||
-                    f.strokeCount >= 2 ||
-                    allQuadsPresent
+                    f.upwardTravelInTopThird >= 0.12f ||
+                    f.strokeCount >= 2
 
                 if (hasTopLoopClosure) {
                     adj += 0.24f
                 }
-                if (allQuadsPresent && f.straightnessRatio > 1.8f) {
+                if (hasTopLoopClosure && f.straightnessRatio > 1.8f) {
                     adj += 0.16f
                 }
-                // If it clearly only has a bottom loop and negligible upper-right density, it's a 6, not an 8
-                if (f.upperRightDensity < 0.07f && !f.returnsToTopAfterBottom && f.strokeCount == 1) {
+                // Key disambiguators:
+                // 1. If 1-stroke never returns to top and has no upward travel in top third, it is an open-top digit (like 6)
+                if (!hasTopLoopClosure) {
+                    adj -= 0.35f
+                }
+                // 2. An 8 never ends at the very bottom (endY > 0.82) unlike 1, 2, 4, 7, 9
+                if (f.endY > 0.82f && f.strokeCount == 1) {
                     adj -= 0.28f
                 }
             }
