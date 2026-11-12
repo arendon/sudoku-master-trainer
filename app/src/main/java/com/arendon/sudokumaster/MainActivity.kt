@@ -20,8 +20,10 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            SudokuMasterTheme {
-                val vm: SudokuTrainerViewModel = viewModel()
+            val vm: SudokuTrainerViewModel = viewModel()
+            val themeMode by vm.themeMode.collectAsState()
+
+            SudokuMasterTheme(themeMode = themeMode) {
                 val uiState by vm.uiState.collectAsState()
                 val masterySummaries by vm.masterySummaries.collectAsState()
                 val progressMap by vm.progressByExerciseId.collectAsState()
@@ -43,7 +45,9 @@ class MainActivity : ComponentActivity() {
                             },
                             onStartPractice = { pattern ->
                                 vm.openExercise(pattern, 0)
-                            }
+                            },
+                            themeMode = themeMode,
+                            onSelectTheme = { vm.setThemeMode(it) }
                         )
                     }
 
@@ -59,7 +63,9 @@ class MainActivity : ComponentActivity() {
                             onSelectExample = { idx -> vm.selectWalkthroughExample(idx) },
                             onSelectWalkthroughStep = { step -> vm.setWalkthroughStep(step) },
                             onOpenExercise = { idx -> vm.openExercise(uiState.selectedPattern, idx) },
-                            onGenerateMoreExercises = { vm.generateMoreExercisesForSelectedPattern() }
+                            onGenerateMoreExercises = { vm.generateMoreExercisesForSelectedPattern() },
+                            themeMode = themeMode,
+                            onSelectTheme = { vm.setThemeMode(it) }
                         )
                     }
 
@@ -93,7 +99,9 @@ class MainActivity : ComponentActivity() {
                             onRevealNextHint = { vm.revealNextHintStage() },
                             onUndo = { vm.undo() },
                             onRedo = { vm.redo() },
-                            onResetExercise = { vm.resetCurrentExercise() }
+                            onResetExercise = { vm.resetCurrentExercise() },
+                            themeMode = themeMode,
+                            onSelectTheme = { vm.setThemeMode(it) }
                         )
                     }
                 }

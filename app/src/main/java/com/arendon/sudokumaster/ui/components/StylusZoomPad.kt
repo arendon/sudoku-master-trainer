@@ -36,6 +36,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.input.pointer.pointerInput
@@ -90,10 +91,17 @@ fun StylusZoomPad(
         }
     }
 
+    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val surfaceBg = if (isDark) MaterialTheme.colorScheme.surfaceVariant else Color(0xFFF8FAFC)
+    val canvasBg = if (isDark) Color(0xFF0F172A) else Color.White
+    val canvasBorder = if (isDark) Color(0xFF475569) else Color(0xFF94A3B8)
+    val guideColor = if (isDark) Color(0xFF1E293B) else Color(0xFFE2E8F0)
+    val inkColor = if (isDark) Color(0xFFA78BFA) else Color(0xFF6D28D9)
+
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
-        color = Color(0xFFF8FAFC),
+        color = surfaceBg,
         tonalElevation = 1.dp
     ) {
         Column(
@@ -115,7 +123,7 @@ fun StylusZoomPad(
                     text = "Magic-Pencil Pad • $targetLabel ($candStr)",
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Bold,
-                    color = Color(0xFF1E3A8A)
+                    color = if (isDark) MaterialTheme.colorScheme.primary else Color(0xFF1E3A8A)
                 )
 
                 if (lastRecognizedStatus != null) {
@@ -138,8 +146,8 @@ fun StylusZoomPad(
                     modifier = Modifier
                         .size(width = 140.dp, height = 115.dp)
                         .clip(RoundedCornerShape(10.dp))
-                        .background(Color.White)
-                        .border(2.dp, Color(0xFF94A3B8), RoundedCornerShape(10.dp)),
+                        .background(canvasBg)
+                        .border(2.dp, canvasBorder, RoundedCornerShape(10.dp)),
                     contentAlignment = Alignment.Center
                 ) {
                     if (completedStrokes.isEmpty() && currentStroke.isEmpty()) {
@@ -147,7 +155,7 @@ fun StylusZoomPad(
                             text = if (activeCell == null) "Select a cell first"
                             else "Write 1-9 here\n(${inkMode.label})\nor scribble to erase",
                             style = MaterialTheme.typography.bodySmall,
-                            color = Color(0xFF94A3B8)
+                            color = if (isDark) Color(0xFF64748B) else Color(0xFF94A3B8)
                         )
                     }
 
@@ -201,13 +209,13 @@ fun StylusZoomPad(
                     ) {
                         // Subtle guide crosshairs
                         drawLine(
-                            color = Color(0xFFE2E8F0),
+                            color = guideColor,
                             start = Offset(size.width / 2f, 8f),
                             end = Offset(size.width / 2f, size.height - 8f),
                             strokeWidth = 1f
                         )
                         drawLine(
-                            color = Color(0xFFE2E8F0),
+                            color = guideColor,
                             start = Offset(8f, size.height / 2f),
                             end = Offset(size.width - 8f, size.height / 2f),
                             strokeWidth = 1f
@@ -224,7 +232,7 @@ fun StylusZoomPad(
                                 }
                                 drawPath(
                                     path = path,
-                                    color = Color(0xFF6D28D9),
+                                    color = inkColor,
                                     style = Stroke(width = 6f, cap = StrokeCap.Round, join = StrokeJoin.Round)
                                 )
                             }
@@ -240,7 +248,7 @@ fun StylusZoomPad(
                     Text(
                         text = "Quick Tap (${inkMode.label}):",
                         style = MaterialTheme.typography.labelSmall,
-                        color = Color(0xFF475569)
+                        color = if (isDark) Color(0xFF94A3B8) else Color(0xFF475569)
                     )
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -251,6 +259,7 @@ fun StylusZoomPad(
                             QuickDigitButton(
                                 digit = d,
                                 isCandidatePresent = isPresent,
+                                isDark = isDark,
                                 onClick = { onDirectDigitTap(d) },
                                 modifier = Modifier.weight(1f)
                             )
@@ -265,6 +274,7 @@ fun StylusZoomPad(
                             QuickDigitButton(
                                 digit = d,
                                 isCandidatePresent = isPresent,
+                                isDark = isDark,
                                 onClick = { onDirectDigitTap(d) },
                                 modifier = Modifier.weight(1f)
                             )
@@ -274,8 +284,8 @@ fun StylusZoomPad(
                                 .weight(1f)
                                 .height(36.dp)
                                 .clip(RoundedCornerShape(6.dp))
-                                .background(Color(0xFFFEE2E2))
-                                .border(1.dp, Color(0xFFF87171), RoundedCornerShape(6.dp))
+                                .background(if (isDark) Color(0xFF450A0A) else Color(0xFFFEE2E2))
+                                .border(1.dp, if (isDark) Color(0xFFDC2626) else Color(0xFFF87171), RoundedCornerShape(6.dp))
                                 .clickable { onEraseTap() },
                             contentAlignment = Alignment.Center
                         ) {
@@ -283,7 +293,7 @@ fun StylusZoomPad(
                                 text = "CLR",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFFB91C1C)
+                                color = if (isDark) Color(0xFFFCA5A5) else Color(0xFFB91C1C)
                             )
                         }
                     }
@@ -296,7 +306,7 @@ fun StylusZoomPad(
                             Text(
                                 text = "Did you mean:",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = Color(0xFF64748B)
+                                color = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
                             )
                             for (alt in lastAlternatives) {
                                 OutlinedButton(
@@ -318,11 +328,23 @@ fun StylusZoomPad(
 private fun QuickDigitButton(
     digit: Int,
     isCandidatePresent: Boolean,
+    isDark: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val bg = if (isCandidatePresent) Color(0xFFDBEAFE) else Color.White
-    val border = if (isCandidatePresent) Color(0xFF2563EB) else Color(0xFFCBD5E1)
+    val bg = when {
+        isCandidatePresent -> if (isDark) Color(0xFF1E3A8A) else Color(0xFFDBEAFE)
+        else -> if (isDark) Color(0xFF1E293B) else Color.White
+    }
+    val border = when {
+        isCandidatePresent -> if (isDark) Color(0xFF60A5FA) else Color(0xFF2563EB)
+        else -> if (isDark) Color(0xFF475569) else Color(0xFFCBD5E1)
+    }
+    val textColor = when {
+        isCandidatePresent -> if (isDark) Color(0xFFDBEAFE) else Color(0xFF1E3A8A)
+        else -> if (isDark) Color(0xFFF1F5F9) else Color(0xFF334155)
+    }
+
     Box(
         modifier = modifier
             .height(36.dp)
@@ -336,7 +358,7 @@ private fun QuickDigitButton(
             text = digit.toString(),
             fontWeight = FontWeight.Bold,
             fontSize = 14.sp,
-            color = if (isCandidatePresent) Color(0xFF1E3A8A) else Color(0xFF334155)
+            color = textColor
         )
     }
 }

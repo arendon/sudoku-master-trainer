@@ -18,6 +18,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
@@ -29,6 +30,7 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.PointerType
@@ -105,12 +107,16 @@ fun SudokuBoardCanvas(
         }
     }
 
+    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val boardBackground = if (isDark) Color(0xFF131B2E) else Color.White
+    val boardBorder = if (isDark) Color(0xFF334155) else Color(0xFF1E293B)
+
     Box(
         modifier = modifier
             .aspectRatio(1f)
             .clip(RoundedCornerShape(12.dp))
-            .background(Color.White)
-            .border(2.dp, Color(0xFF1E293B), RoundedCornerShape(12.dp))
+            .background(boardBackground)
+            .border(2.dp, boardBorder, RoundedCornerShape(12.dp))
             .padding(4.dp)
     ) {
         Canvas(
@@ -285,7 +291,7 @@ fun SudokuBoardCanvas(
 
             // 1. Draw coordinate headers (C1..C9, R1..R9)
             val headerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = android.graphics.Color.parseColor("#64748B")
+                color = if (isDark) android.graphics.Color.parseColor("#94A3B8") else android.graphics.Color.parseColor("#64748B")
                 textSize = gutter * 0.58f
                 textAlign = Paint.Align.CENTER
                 typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
@@ -311,12 +317,12 @@ fun SudokuBoardCanvas(
                         (board.digitAt(pos) == filterDigit || filterDigit in board.candidatesAt(pos))
 
                     val bgColor = when {
-                        pos == pivotCell -> Color(0xFFFEF3C7) // Warm Gold for Pivot
-                        pos in allPatternHighlighted -> Color(0xFFD1FAE5) // Emerald tint for Pattern Defining Cells
-                        pos == activeCell -> Color(0xFFDBEAFE) // Active selected cell
-                        hasFilteredCandidate -> Color(0xFFE0F2FE) // Candidate filter highlight
-                        activeCell != null && pos.isPeerOf(activeCell) -> Color(0xFFF1F5F9)
-                        else -> Color.White
+                        pos == pivotCell -> if (isDark) Color(0xFF78350F) else Color(0xFFFEF3C7) // Warm Gold for Pivot
+                        pos in allPatternHighlighted -> if (isDark) Color(0xFF064E3B) else Color(0xFFD1FAE5) // Emerald tint for Pattern Defining Cells
+                        pos == activeCell -> if (isDark) Color(0xFF1E3A8A) else Color(0xFFDBEAFE) // Active selected cell
+                        hasFilteredCandidate -> if (isDark) Color(0xFF0369A1).copy(alpha = 0.55f) else Color(0xFFE0F2FE) // Candidate filter highlight
+                        activeCell != null && pos.isPeerOf(activeCell) -> if (isDark) Color(0xFF1E293B) else Color(0xFFF1F5F9)
+                        else -> boardBackground
                     }
 
                     drawRect(
@@ -327,7 +333,7 @@ fun SudokuBoardCanvas(
 
                     // Draw distinct border around Pattern Defining Cells
                     if (pos in allPatternHighlighted) {
-                        val borderColor = if (pos == pivotCell) Color(0xFFD97706) else Color(0xFF059669)
+                        val borderColor = if (pos == pivotCell) Color(0xFFF59E0B) else Color(0xFF10B981)
                         drawRoundRect(
                             color = borderColor,
                             topLeft = Offset(left + 2f, top + 2f),
@@ -337,7 +343,7 @@ fun SudokuBoardCanvas(
                         )
                     } else if (pos == activeCell) {
                         drawRect(
-                            color = Color(0xFF2563EB),
+                            color = if (isDark) Color(0xFF60A5FA) else Color(0xFF2563EB),
                             topLeft = Offset(left + 1.5f, top + 1.5f),
                             size = Size(cellSize - 3f, cellSize - 3f),
                             style = Stroke(width = 2.8f)
@@ -351,7 +357,11 @@ fun SudokuBoardCanvas(
                 val offset = gutter + i * cellSize
                 val isMajor = i % 3 == 0
                 val strokeWidth = if (isMajor) 3.5f else 1.1f
-                val lineColor = if (isMajor) Color(0xFF0F172A) else Color(0xFFCBD5E1)
+                val lineColor = if (isMajor) {
+                    if (isDark) Color(0xFF94A3B8) else Color(0xFF0F172A)
+                } else {
+                    if (isDark) Color(0xFF334155) else Color(0xFFCBD5E1)
+                }
 
                 // Vertical line
                 drawLine(
@@ -429,13 +439,13 @@ fun SudokuBoardCanvas(
 
             // 5. Draw Given Digits, User Digits, and 3x3 Candidate Mini-Grids
             val givenPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = android.graphics.Color.parseColor("#0F172A")
+                color = if (isDark) android.graphics.Color.parseColor("#F8FAFC") else android.graphics.Color.parseColor("#0F172A")
                 textSize = cellSize * 0.62f
                 textAlign = Paint.Align.CENTER
                 typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
             }
             val userDigitPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = android.graphics.Color.parseColor("#1D4ED8")
+                color = if (isDark) android.graphics.Color.parseColor("#60A5FA") else android.graphics.Color.parseColor("#1D4ED8")
                 textSize = cellSize * 0.62f
                 textAlign = Paint.Align.CENTER
                 typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
@@ -448,13 +458,13 @@ fun SudokuBoardCanvas(
             }
 
             val candNormalPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = android.graphics.Color.parseColor("#334155")
+                color = if (isDark) android.graphics.Color.parseColor("#94A3B8") else android.graphics.Color.parseColor("#334155")
                 textSize = cellSize * 0.25f
                 textAlign = Paint.Align.CENTER
                 typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
             }
             val candBoldPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = android.graphics.Color.parseColor("#0F172A")
+                color = if (isDark) android.graphics.Color.parseColor("#FFFFFF") else android.graphics.Color.parseColor("#0F172A")
                 textSize = cellSize * 0.27f
                 textAlign = Paint.Align.CENTER
                 typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
@@ -469,8 +479,8 @@ fun SudokuBoardCanvas(
             for (r in 0..8) {
                 for (c in 0..8) {
                     val pos = CellPos(r, c)
-                    val left = gutter + c * cellSize
-                    val top = gutter + r * cellSize
+                    val left = startX + gutter + c * cellSize
+                    val top = startY + gutter + r * cellSize
                     val digit = board.digitAt(pos)
 
                     if (digit != 0) {
@@ -549,7 +559,7 @@ fun SudokuBoardCanvas(
                     }
                     drawPath(
                         path = path,
-                        color = Color(0xFF7C3AED),
+                        color = if (isDark) Color(0xFFA78BFA) else Color(0xFF7C3AED),
                         style = Stroke(width = 5.5f, cap = StrokeCap.Round, join = StrokeJoin.Round)
                     )
                 }

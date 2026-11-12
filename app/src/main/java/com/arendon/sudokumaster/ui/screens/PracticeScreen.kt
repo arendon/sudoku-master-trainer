@@ -46,6 +46,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -55,6 +56,8 @@ import com.arendon.sudokumaster.domain.model.ExerciseDrillPhase
 import com.arendon.sudokumaster.domain.model.InkInputMode
 import com.arendon.sudokumaster.ui.components.StylusZoomPad
 import com.arendon.sudokumaster.ui.components.SudokuBoardCanvas
+import com.arendon.sudokumaster.ui.components.ThemeSelectionButton
+import com.arendon.sudokumaster.ui.theme.ThemeMode
 import com.arendon.sudokumaster.ui.viewmodel.PracticeUiState
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -80,7 +83,9 @@ fun PracticeScreen(
     onRevealNextHint: () -> Unit,
     onUndo: () -> Unit,
     onRedo: () -> Unit,
-    onResetExercise: () -> Unit
+    onResetExercise: () -> Unit,
+    themeMode: ThemeMode = ThemeMode.SYSTEM,
+    onSelectTheme: (ThemeMode) -> Unit = {}
 ) {
     val board = state.board ?: return
     val instance = state.activePatternInstance ?: return
@@ -144,6 +149,11 @@ fun PracticeScreen(
                             tint = Color.White
                         )
                     }
+                    ThemeSelectionButton(
+                        currentTheme = themeMode,
+                        onSelectTheme = onSelectTheme,
+                        iconTint = Color.White
+                    )
                     IconButton(onClick = onUndo, enabled = state.canUndo) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.Undo,
@@ -200,10 +210,11 @@ fun PracticeScreen(
                             modifier = Modifier
                                 .weight(1f)
                                 .fillMaxWidth()
-                                .padding(bottom = 8.dp),
-                            contentAlignment = Alignment.Center
+                                .padding(bottom = 32.dp),
+                            contentAlignment = Alignment.TopCenter
                         ) {
-                            val boardSize = minOf(maxWidth, maxHeight)
+                            val availableHeight = (maxHeight - 16.dp).coerceAtLeast(0.dp)
+                            val boardSize = minOf(maxWidth, availableHeight)
                             SudokuBoardCanvas(
                                 board = board,
                                 activeCell = state.activeCell,
@@ -223,31 +234,37 @@ fun PracticeScreen(
                             )
                         }
                     } else {
-                        SudokuBoardCanvas(
-                            board = board,
-                            activeCell = state.activeCell,
-                            filterDigit = state.filterDigit,
-                            inkMode = state.inkMode,
-                            stylusOnlyPalmRejection = state.stylusOnlyPalmRejection,
-                            highlightedPatternCells = highlightedPatternCells,
-                            pivotCell = highlightedPivot,
-                            highlightedEliminations = highlightedElims,
-                            visualLinks = visualLinks,
-                            readOnly = false,
-                            onSelectCell = onSelectCell,
-                            onTogglePatternCell = onTogglePatternCell,
-                            onToggleCandidate = onToggleCandidate,
-                            onRecognizedInCellInk = { cell, res -> onHandwritingRecognized(cell, res) },
-                            modifier = Modifier.fillMaxWidth()
-                        )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 12.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            SudokuBoardCanvas(
+                                board = board,
+                                activeCell = state.activeCell,
+                                filterDigit = state.filterDigit,
+                                inkMode = state.inkMode,
+                                stylusOnlyPalmRejection = state.stylusOnlyPalmRejection,
+                                highlightedPatternCells = highlightedPatternCells,
+                                pivotCell = highlightedPivot,
+                                highlightedEliminations = highlightedElims,
+                                visualLinks = visualLinks,
+                                readOnly = false,
+                                onSelectCell = onSelectCell,
+                                onTogglePatternCell = onTogglePatternCell,
+                                onToggleCandidate = onToggleCandidate,
+                                onRecognizedInCellInk = { cell, res -> onHandwritingRecognized(cell, res) },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
                     }
                 }
             }
 
             val controlsSection: @Composable (Modifier) -> Unit = { mod ->
                 Column(
-                    modifier = mod
-                        .verticalScroll(rememberScrollState()),
+                    modifier = mod,
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     // Exercise Navigation Bar (< Prev | #1..#10+ | Next > | +5 More)
@@ -309,9 +326,9 @@ fun PracticeScreen(
                 ) {
                     if (!state.isLeftHandedLayout) {
                         boardSection(Modifier.weight(1.05f).fillMaxHeight())
-                        controlsSection(Modifier.weight(0.95f).fillMaxHeight())
+                        controlsSection(Modifier.weight(0.95f).fillMaxHeight().verticalScroll(rememberScrollState()))
                     } else {
-                        controlsSection(Modifier.weight(0.95f).fillMaxHeight())
+                        controlsSection(Modifier.weight(0.95f).fillMaxHeight().verticalScroll(rememberScrollState()))
                         boardSection(Modifier.weight(1.05f).fillMaxHeight())
                     }
                 }
@@ -339,10 +356,15 @@ private fun PrecomputeAndFilterBar(
     onPrecomputeCandidates: () -> Unit,
     onToggleFilterDigit: (Int) -> Unit
 ) {
+    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val unselectedBg = if (isDark) Color(0xFF1E293B) else Color(0xFFF1F5F9)
+    val unselectedBorder = if (isDark) Color(0xFF475569) else Color(0xFFCBD5E1)
+    val unselectedText = if (isDark) Color(0xFFF1F5F9) else Color(0xFF1E293B)
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         if (isLandscape) {
@@ -381,10 +403,10 @@ private fun PrecomputeAndFilterBar(
                                 .weight(1f)
                                 .height(34.dp)
                                 .clip(RoundedCornerShape(6.dp))
-                                .background(if (isSelected) Color(0xFF0284C7) else Color(0xFFF1F5F9))
+                                .background(if (isSelected) Color(0xFF0284C7) else unselectedBg)
                                 .border(
                                     width = 1.5.dp,
-                                    color = if (isSelected) Color(0xFF0369A1) else Color(0xFFCBD5E1),
+                                    color = if (isSelected) Color(0xFF0369A1) else unselectedBorder,
                                     shape = RoundedCornerShape(6.dp)
                                 )
                                 .clickable { onToggleFilterDigit(d) },
@@ -394,7 +416,7 @@ private fun PrecomputeAndFilterBar(
                                 text = d.toString(),
                                 fontWeight = FontWeight.ExtraBold,
                                 fontSize = 13.sp,
-                                color = if (isSelected) Color.White else Color(0xFF1E293B)
+                                color = if (isSelected) Color.White else unselectedText
                             )
                         }
                     }
@@ -425,7 +447,7 @@ private fun PrecomputeAndFilterBar(
                     Text(
                         text = if (filterDigit != null) "Filtering Digit $filterDigit" else "Highlight Candidate (1-9):",
                         style = MaterialTheme.typography.labelMedium,
-                        color = Color(0xFF475569),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontWeight = FontWeight.SemiBold
                     )
                 }
@@ -441,10 +463,10 @@ private fun PrecomputeAndFilterBar(
                                 .weight(1f)
                                 .height(36.dp)
                                 .clip(RoundedCornerShape(8.dp))
-                                .background(if (isSelected) Color(0xFF0284C7) else Color(0xFFF1F5F9))
+                                .background(if (isSelected) Color(0xFF0284C7) else unselectedBg)
                                 .border(
                                     width = 1.5.dp,
-                                    color = if (isSelected) Color(0xFF0369A1) else Color(0xFFCBD5E1),
+                                    color = if (isSelected) Color(0xFF0369A1) else unselectedBorder,
                                     shape = RoundedCornerShape(8.dp)
                                 )
                                 .clickable { onToggleFilterDigit(d) },
@@ -453,7 +475,7 @@ private fun PrecomputeAndFilterBar(
                             Text(
                                 text = d.toString(),
                                 fontWeight = FontWeight.ExtraBold,
-                                color = if (isSelected) Color.White else Color(0xFF1E293B)
+                                color = if (isSelected) Color.White else unselectedText
                             )
                         }
                     }
@@ -486,7 +508,7 @@ private fun ExerciseNavigationRow(
             text = "Exercise #${currentIndex + 1} / $totalExercises",
             style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.Bold,
-            color = Color(0xFF1E293B)
+            color = MaterialTheme.colorScheme.onSurface
         )
 
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -510,11 +532,13 @@ private fun TwoStepVerificationCard(
     onKeepSolving: () -> Unit,
     onNextExercise: () -> Unit
 ) {
+    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
     val bgColor = when {
-        state.isFeedbackError -> Color(0xFFFEF2F2)
+        state.isFeedbackError -> if (isDark) Color(0xFF450A0A) else Color(0xFFFEF2F2)
         state.drillPhase == ExerciseDrillPhase.COMPLETED_DRILL ||
-            state.drillPhase == ExerciseDrillPhase.FULL_BOARD_SOLVED -> Color(0xFFECFDF5)
-        else -> Color(0xFFEFF6FF)
+            state.drillPhase == ExerciseDrillPhase.FULL_BOARD_SOLVED ->
+            if (isDark) Color(0xFF064E3B) else Color(0xFFECFDF5)
+        else -> if (isDark) Color(0xFF172554) else Color(0xFFEFF6FF)
     }
     val borderColor = when {
         state.isFeedbackError -> Color(0xFFF87171)
@@ -546,14 +570,14 @@ private fun TwoStepVerificationCard(
                 text = phaseLabel,
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.ExtraBold,
-                color = Color(0xFF0F172A)
+                color = MaterialTheme.colorScheme.onSurface
             )
 
             if (state.feedbackMessage != null) {
                 Text(
                     text = state.feedbackMessage,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = if (state.isFeedbackError) Color(0xFFB91C1C) else Color(0xFF1E293B)
+                    color = if (state.isFeedbackError) (if (isDark) Color(0xFFFCA5A5) else Color(0xFFB91C1C)) else MaterialTheme.colorScheme.onSurface
                 )
             }
 
@@ -622,7 +646,7 @@ private fun InkModeSelectorCard(
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
-        color = Color.White,
+        color = MaterialTheme.colorScheme.surface,
         tonalElevation = 1.dp
     ) {
         Column(
@@ -633,7 +657,7 @@ private fun InkModeSelectorCard(
                 text = "Stylus / Pencil Interaction Mode:",
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.Bold,
-                color = Color(0xFF0F172A)
+                color = MaterialTheme.colorScheme.onSurface
             )
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -645,8 +669,8 @@ private fun InkModeSelectorCard(
                         onClick = { onSelectMode(mode) },
                         modifier = Modifier.weight(1f),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = if (isSelected) Color(0xFF1E3A8A) else Color(0xFFE2E8F0),
-                            contentColor = if (isSelected) Color.White else Color(0xFF1E293B)
+                            containerColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                            contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
                         )
                     ) {
                         Text(mode.label, fontSize = 12.sp, fontWeight = FontWeight.Bold)
@@ -656,7 +680,7 @@ private fun InkModeSelectorCard(
             Text(
                 text = currentMode.shortHint,
                 style = MaterialTheme.typography.bodySmall,
-                color = Color(0xFF64748B)
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
@@ -670,10 +694,12 @@ private fun ProgressiveHintCard(
     stage3Text: String,
     onRevealNextStage: () -> Unit
 ) {
+    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Column(
@@ -689,7 +715,7 @@ private fun ProgressiveHintCard(
                     text = "3-Stage Progressive Hints ($revealedStage / 3 Revealed)",
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
-                    color = Color(0xFF1E3A8A)
+                    color = if (isDark) MaterialTheme.colorScheme.primary else Color(0xFF1E3A8A)
                 )
 
                 if (revealedStage < 3) {
@@ -708,7 +734,7 @@ private fun ProgressiveHintCard(
                 Text(
                     text = "Solve without hints to earn a ★ Clean Solve badge! Stuck? Reveal Hint 1 for a gentle nudge.",
                     style = MaterialTheme.typography.bodySmall,
-                    color = Color(0xFF64748B)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
@@ -716,24 +742,24 @@ private fun ProgressiveHintCard(
                 HintStageBox(
                     title = "Stage 1 — Where to Look:",
                     text = stage1Text,
-                    bgColor = Color(0xFFEFF6FF),
-                    titleColor = Color(0xFF1E40AF)
+                    bgColor = if (isDark) Color(0xFF172554) else Color(0xFFEFF6FF),
+                    titleColor = if (isDark) Color(0xFF93C5FD) else Color(0xFF1E40AF)
                 )
             }
             if (revealedStage >= 2) {
                 HintStageBox(
                     title = "Stage 2 — Pattern Cells Highlighted on Board:",
                     text = stage2Text,
-                    bgColor = Color(0xFFECFDF5),
-                    titleColor = Color(0xFF065F46)
+                    bgColor = if (isDark) Color(0xFF064E3B) else Color(0xFFECFDF5),
+                    titleColor = if (isDark) Color(0xFF6EE7B7) else Color(0xFF065F46)
                 )
             }
             if (revealedStage >= 3) {
                 HintStageBox(
                     title = "Stage 3 — Full Deduction & Target Eliminations:",
                     text = stage3Text,
-                    bgColor = Color(0xFFFEF2F2),
-                    titleColor = Color(0xFF991B1B)
+                    bgColor = if (isDark) Color(0xFF450A0A) else Color(0xFFFEF2F2),
+                    titleColor = if (isDark) Color(0xFFFCA5A5) else Color(0xFF991B1B)
                 )
             }
         }
@@ -763,7 +789,7 @@ private fun HintStageBox(
             Text(
                 text = text,
                 style = MaterialTheme.typography.bodySmall,
-                color = Color(0xFF0F172A)
+                color = MaterialTheme.colorScheme.onSurface
             )
         }
     }

@@ -27,23 +27,27 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.arendon.sudokumaster.data.local.PatternMasterySummary
 import com.arendon.sudokumaster.domain.model.ComplexityTier
 import com.arendon.sudokumaster.domain.model.PatternType
+import com.arendon.sudokumaster.ui.components.ThemeSelectionButton
+import com.arendon.sudokumaster.ui.theme.ThemeMode
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     masterySummaries: Map<PatternType, PatternMasterySummary>,
     onOpenLesson: (PatternType) -> Unit,
-    onStartPractice: (PatternType) -> Unit
+    onStartPractice: (PatternType) -> Unit,
+    themeMode: ThemeMode = ThemeMode.SYSTEM,
+    onSelectTheme: (ThemeMode) -> Unit = {}
 ) {
     val totalExercises = masterySummaries.values.sumOf { it.totalExercises }.coerceAtLeast(120)
     val totalSolved = masterySummaries.values.sumOf { it.solvedCount }
@@ -66,6 +70,13 @@ fun HomeScreen(
                             color = Color(0xFFDBEAFE)
                         )
                     }
+                },
+                actions = {
+                    ThemeSelectionButton(
+                        currentTheme = themeMode,
+                        onSelectTheme = onSelectTheme,
+                        iconTint = Color.White
+                    )
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = Color(0xFF1E3A8A),
@@ -198,12 +209,12 @@ private fun TierHeader(tier: ComplexityTier) {
             text = tier.title,
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.ExtraBold,
-            color = Color(0xFF0F172A)
+            color = MaterialTheme.colorScheme.onBackground
         )
         Text(
             text = tier.subtitle,
             style = MaterialTheme.typography.bodyMedium,
-            color = Color(0xFF475569)
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }
@@ -216,10 +227,12 @@ private fun PatternCurriculumCard(
     onStartPractice: () -> Unit
 ) {
     val isMastered = summary.solvedCount >= 10
+    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(
@@ -238,14 +251,14 @@ private fun PatternCurriculumCard(
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(8.dp))
-                            .background(Color(0xFFDBEAFE))
+                            .background(MaterialTheme.colorScheme.primaryContainer)
                             .padding(horizontal = 10.dp, vertical = 6.dp)
                     ) {
                         Text(
                             text = "#${pattern.complexityOrder}",
                             style = MaterialTheme.typography.labelLarge,
                             fontWeight = FontWeight.ExtraBold,
-                            color = Color(0xFF1E3A8A)
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
                         )
                     }
 
@@ -253,13 +266,17 @@ private fun PatternCurriculumCard(
                         text = pattern.displayName,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF0F172A)
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 }
 
                 Surface(
                     shape = RoundedCornerShape(20.dp),
-                    color = if (isMastered) Color(0xFFD1FAE5) else Color(0xFFF1F5F9)
+                    color = if (isMastered) {
+                        if (isDark) Color(0xFF064E3B) else Color(0xFFD1FAE5)
+                    } else {
+                        MaterialTheme.colorScheme.surfaceVariant
+                    }
                 ) {
                     Text(
                         text = if (isMastered) {
@@ -270,7 +287,11 @@ private fun PatternCurriculumCard(
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Bold,
-                        color = if (isMastered) Color(0xFF065F46) else Color(0xFF334155)
+                        color = if (isMastered) {
+                            if (isDark) Color(0xFF6EE7B7) else Color(0xFF065F46)
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        }
                     )
                 }
             }
@@ -278,7 +299,7 @@ private fun PatternCurriculumCard(
             Text(
                 text = pattern.shortSummary,
                 style = MaterialTheme.typography.bodyMedium,
-                color = Color(0xFF334155)
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
             LinearProgressIndicator(
@@ -291,7 +312,7 @@ private fun PatternCurriculumCard(
                     .height(6.dp)
                     .clip(RoundedCornerShape(3.dp)),
                 color = if (isMastered) Color(0xFF059669) else Color(0xFF2563EB),
-                trackColor = Color(0xFFE2E8F0)
+                trackColor = MaterialTheme.colorScheme.outlineVariant
             )
 
             Row(

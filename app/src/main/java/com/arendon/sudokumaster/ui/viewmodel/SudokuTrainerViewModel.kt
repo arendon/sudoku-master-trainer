@@ -1,6 +1,7 @@
 package com.arendon.sudokumaster.ui.viewmodel
 
 import android.app.Application
+import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.arendon.sudokumaster.data.local.ExerciseCompletionStatus
@@ -22,6 +23,7 @@ import com.arendon.sudokumaster.domain.solver.CandidateCalculator
 import com.arendon.sudokumaster.domain.solver.CuratedExerciseBank
 import com.arendon.sudokumaster.domain.solver.PatternDetector
 import com.arendon.sudokumaster.domain.solver.VerificationFeedback
+import com.arendon.sudokumaster.ui.theme.ThemeMode
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -71,6 +73,21 @@ class SudokuTrainerViewModel(application: Application) : AndroidViewModel(applic
     private val repository = ProgressRepository(
         SudokuDatabase.getInstance(application).progressDao()
     )
+
+    private val prefs = application.getSharedPreferences("sudoku_preferences", Context.MODE_PRIVATE)
+
+    private val _themeMode = MutableStateFlow(
+        runCatching {
+            val saved = prefs.getString("app_theme_mode", ThemeMode.SYSTEM.name) ?: ThemeMode.SYSTEM.name
+            ThemeMode.valueOf(saved)
+        }.getOrDefault(ThemeMode.SYSTEM)
+    )
+    val themeMode: StateFlow<ThemeMode> = _themeMode.asStateFlow()
+
+    fun setThemeMode(mode: ThemeMode) {
+        _themeMode.value = mode
+        prefs.edit().putString("app_theme_mode", mode.name).apply()
+    }
 
     private val _uiState = MutableStateFlow(PracticeUiState())
     val uiState: StateFlow<PracticeUiState> = _uiState.asStateFlow()

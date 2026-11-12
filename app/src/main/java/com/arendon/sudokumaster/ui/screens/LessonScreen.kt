@@ -43,6 +43,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.arendon.sudokumaster.data.local.ExerciseCompletionStatus
@@ -53,6 +54,8 @@ import com.arendon.sudokumaster.domain.model.InkInputMode
 import com.arendon.sudokumaster.domain.model.PatternType
 import com.arendon.sudokumaster.domain.model.WalkthroughExample
 import com.arendon.sudokumaster.ui.components.SudokuBoardCanvas
+import com.arendon.sudokumaster.ui.components.ThemeSelectionButton
+import com.arendon.sudokumaster.ui.theme.ThemeMode
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -67,7 +70,9 @@ fun LessonScreen(
     onSelectExample: (Int) -> Unit,
     onSelectWalkthroughStep: (Int) -> Unit,
     onOpenExercise: (Int) -> Unit,
-    onGenerateMoreExercises: () -> Unit
+    onGenerateMoreExercises: () -> Unit,
+    themeMode: ThemeMode = ThemeMode.SYSTEM,
+    onSelectTheme: (ThemeMode) -> Unit = {}
 ) {
     val activeExample = examples.getOrNull(selectedExampleIndex)
 
@@ -98,6 +103,11 @@ fun LessonScreen(
                     }
                 },
                 actions = {
+                    ThemeSelectionButton(
+                        currentTheme = themeMode,
+                        onSelectTheme = onSelectTheme,
+                        iconTint = Color.White
+                    )
                     Button(
                         onClick = { onOpenExercise(0) },
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF059669)),
@@ -199,10 +209,12 @@ fun LessonScreen(
 
 @Composable
 private fun PatternTheoryCard(patternType: PatternType) {
+    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(
@@ -213,17 +225,17 @@ private fun PatternTheoryCard(patternType: PatternType) {
                 text = "How ${patternType.displayName} Works",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.ExtraBold,
-                color = Color(0xFF1E3A8A)
+                color = if (isDark) MaterialTheme.colorScheme.primary else Color(0xFF1E3A8A)
             )
             Text(
                 text = patternType.theoryExplanation,
                 style = MaterialTheme.typography.bodyMedium,
-                color = Color(0xFF1E293B)
+                color = MaterialTheme.colorScheme.onSurface
             )
 
             Surface(
                 shape = RoundedCornerShape(10.dp),
-                color = Color(0xFFF0FDF4)
+                color = if (isDark) Color(0xFF064E3B) else Color(0xFFF0FDF4)
             ) {
                 Column(
                     modifier = Modifier
@@ -235,13 +247,13 @@ private fun PatternTheoryCard(patternType: PatternType) {
                         text = "How to Spot It:",
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF065F46)
+                        color = if (isDark) Color(0xFF6EE7B7) else Color(0xFF065F46)
                     )
                     patternType.howToSpot.forEachIndexed { idx, tip ->
                         Text(
                             text = "${idx + 1}. $tip",
                             style = MaterialTheme.typography.bodySmall,
-                            color = Color(0xFF064E3B)
+                            color = if (isDark) Color(0xFFD1FAE5) else Color(0xFF064E3B)
                         )
                     }
                 }
@@ -264,11 +276,12 @@ private fun InteractiveWalkthroughCard(
     val highlightedElims = if (walkthroughStep >= 3) instance.targetEliminations else emptySet()
     val visualLinks = if (walkthroughStep >= 2) instance.visualLinks else emptyList()
     val filterDigit = if (instance.focusDigits.size == 1) instance.focusDigits.first() else null
+    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
 
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(
@@ -284,7 +297,7 @@ private fun InteractiveWalkthroughCard(
                     text = "Interactive Visual Examples",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.ExtraBold,
-                    color = Color(0xFF1E3A8A)
+                    color = if (isDark) MaterialTheme.colorScheme.primary else Color(0xFF1E3A8A)
                 )
 
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -314,8 +327,8 @@ private fun InteractiveWalkthroughCard(
                         onClick = { onSelectStep(stepNum) },
                         modifier = Modifier.weight(1f),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = if (isSelected) Color(0xFF2563EB) else Color(0xFFE2E8F0),
-                            contentColor = if (isSelected) Color.White else Color(0xFF1E293B)
+                            containerColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                            contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
                         )
                     ) {
                         Text(label, fontWeight = FontWeight.Bold)
@@ -327,9 +340,9 @@ private fun InteractiveWalkthroughCard(
             Surface(
                 shape = RoundedCornerShape(10.dp),
                 color = when (walkthroughStep) {
-                    1 -> Color(0xFFEFF6FF)
-                    2 -> Color(0xFFECFDF5)
-                    else -> Color(0xFFFEF2F2)
+                    1 -> if (isDark) Color(0xFF172554) else Color(0xFFEFF6FF)
+                    2 -> if (isDark) Color(0xFF064E3B) else Color(0xFFECFDF5)
+                    else -> if (isDark) Color(0xFF450A0A) else Color(0xFFFEF2F2)
                 }
             ) {
                 val stepText = when (walkthroughStep) {
@@ -344,7 +357,7 @@ private fun InteractiveWalkthroughCard(
                         .padding(12.dp),
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Medium,
-                    color = Color(0xFF0F172A)
+                    color = MaterialTheme.colorScheme.onSurface
                 )
             }
 
@@ -379,10 +392,12 @@ private fun ExerciseBankCard(
     onOpenExercise: (Int) -> Unit,
     onGenerateMore: () -> Unit
 ) {
+    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(
@@ -399,12 +414,12 @@ private fun ExerciseBankCard(
                         text = "Practice Exercises (${exercises.size} Available)",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.ExtraBold,
-                        color = Color(0xFF0F172A)
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
                         text = "Select any exercise below or generate more on demand",
                         style = MaterialTheme.typography.bodySmall,
-                        color = Color(0xFF64748B)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
 
@@ -422,13 +437,17 @@ private fun ExerciseBankCard(
                     val status = progressMap[exercise.id]?.completionStatus ?: ExerciseCompletionStatus.UNSTARTED
                     val (bgColor, borderColor, textColor, badge) = when (status) {
                         ExerciseCompletionStatus.SOLVED_CLEAN ->
-                            Quad(Color(0xFFD1FAE5), Color(0xFF059669), Color(0xFF065F46), "★ Clean")
+                            if (isDark) Quad(Color(0xFF064E3B), Color(0xFF059669), Color(0xFF6EE7B7), "★ Clean")
+                            else Quad(Color(0xFFD1FAE5), Color(0xFF059669), Color(0xFF065F46), "★ Clean")
                         ExerciseCompletionStatus.SOLVED_WITH_HINTS ->
-                            Quad(Color(0xFFDBEAFE), Color(0xFF2563EB), Color(0xFF1E3A8A), "✓ Solved")
+                            if (isDark) Quad(Color(0xFF1E3A8A), Color(0xFF2563EB), Color(0xFF93C5FD), "✓ Solved")
+                            else Quad(Color(0xFFDBEAFE), Color(0xFF2563EB), Color(0xFF1E3A8A), "✓ Solved")
                         ExerciseCompletionStatus.IN_PROGRESS ->
-                            Quad(Color(0xFFFEF3C7), Color(0xFFD97706), Color(0xFF92400E), "In Progress")
+                            if (isDark) Quad(Color(0xFF78350F), Color(0xFFD97706), Color(0xFFFDE68A), "In Progress")
+                            else Quad(Color(0xFFFEF3C7), Color(0xFFD97706), Color(0xFF92400E), "In Progress")
                         ExerciseCompletionStatus.UNSTARTED ->
-                            Quad(Color(0xFFF8FAFC), Color(0xFFCBD5E1), Color(0xFF334155), "Start")
+                            if (isDark) Quad(Color(0xFF1E293B), Color(0xFF475569), Color(0xFFCBD5E1), "Start")
+                            else Quad(Color(0xFFF8FAFC), Color(0xFFCBD5E1), Color(0xFF334155), "Start")
                     }
 
                     Box(
