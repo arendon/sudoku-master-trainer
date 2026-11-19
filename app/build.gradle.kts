@@ -1,9 +1,27 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
 }
+
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+    apply(plugin = "com.google.firebase.appdistribution")
+}
+
+val keystorePropsFile = rootProject.file("keystore.properties")
+val keystoreProps = Properties().apply {
+    if (keystorePropsFile.exists()) {
+        keystorePropsFile.inputStream().use { load(it) }
+    }
+}
+
+fun signingValue(envName: String, propName: String): String? =
+    System.getenv(envName)?.takeIf { it.isNotBlank() }
+        ?: keystoreProps.getProperty(propName)?.takeIf { it.isNotBlank() }
 
 android {
     namespace = "com.arendon.sudokumaster"
@@ -13,8 +31,8 @@ android {
         applicationId = "com.arendon.sudokumaster"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
-        versionName = "1.1.0"
+        versionCode = System.getenv("VERSION_CODE")?.toIntOrNull() ?: 3
+        versionName = System.getenv("VERSION_NAME")?.takeIf { it.isNotBlank() } ?: "1.2.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -23,36 +41,84 @@ android {
     }
 
     signingConfigs {
-        create("permanent") {
-            storeFile = file(System.getenv("SIGNING_STORE_FILE") ?: "keystore/sudoku-master.p12")
-            storePassword = System.getenv("SIGNING_STORE_PASSWORD") ?: "sudokumaster123"
-            keyAlias = System.getenv("SIGNING_KEY_ALIAS") ?: "sudoku_master"
-            keyPassword = System.getenv("SIGNING_KEY_PASSWORD") ?: "sudokumaster123"
+        val storePath = signingValue("ANDROID_KEYSTORE_PATH", "storeFile")
+        val storePass = signingValue("KEYSTORE_PASSWORD", "storePassword")
+        val alias = signingValue("KEY_ALIAS", "keyAlias")
+        val keyPass = signingValue("KEY_PASSWORD", "keyPassword")
+
+        if (storePath != null && storePass != null && alias != null && keyPass != null) {
+            create("release") {
+                storeFile = rootProject.file(storePath)
+                storePassword = storePass
+                keyAlias = alias
+                keyPassword = keyPass
+            }
+        }
+    }
+
+    flavorDimensions += "distribution"
+    productFlavors {
+        create("directApk") {
+            dimension = "distribution"
+            buildConfigField("String", "DISTRIBUTION_CHANNEL", "\"DIRECT_APK\"")
+        }
+        create("playBundle") {
+            dimension = "distribution"
+            buildConfigField("String", "DISTRIBUTION_CHANNEL", "\"PLAY_BUNDLE\"")
         }
     }
 
     buildTypes {
-        debug {
-            signingConfig = signingConfigs.getByName("permanent")
-        }
         release {
-            signingConfig = signingConfigs.getByName("permanent")
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            isDebuggable = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
+        }
+        debug {
+            isMinifyEnabled = false
         }
     }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+
     kotlinOptions {
         jvmTarget = "17"
     }
+
     buildFeatures {
         compose = true
+        buildConfig = true
+    }
+
+    packaging {
+        resources {
+            excludes += setOf(
+                "/META-INF/{AL2.0,LGPL2.1}",
+                "META-INF/INDEX.LIST",
+                "META-INF/DEPENDENCIES",
+                "META-INF/LICENSE*",
+                "META-INF/NOTICE*"
+            )
+        }
+    }
+
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+        unitTests.all {
+            it.testLogging {
+                exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+                showStackTraces = true
+                showCauses = true
+            }
+        }
     }
 }
 
@@ -74,6 +140,10 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.coroutines.play.services)
     implementation(libs.mlkit.digital.ink)
+
+    // API stub included across all flavors; full self-updater only in directApk
+    implementation(libs.firebase.appdistribution.api)
+    "directApkImplementation"(libs.firebase.appdistribution)
 
     testImplementation(libs.junit)
     debugImplementation(libs.androidx.ui.tooling)

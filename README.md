@@ -22,3 +22,16 @@ An Android application designed to teach intermediate and advanced Sudoku solvin
   - *Stage 2*: Highlights the pattern's defining cells on the board and explains why they lock candidates
   - *Stage 3*: Draws visual deduction links and highlights the exact target candidate eliminations
 - **Local Progress Tracking**: Persists per-exercise status (*Solved Cleanly*, *Solved with Hints*, *In Progress* mid-board state) and pattern mastery badges locally using Room.
+
+## Build & Distribution
+
+```bash
+# Run unit tests
+./gradlew testDirectApkDebugUnitTest --no-daemon
+
+# Build debug APK
+./gradlew assembleDirectApkDebug --no-daemon
+```
+
+- **Standard CI (`.github/workflows/ci.yml`)**: Runs unit tests and builds the `directApk` debug APK on pushes and PRs to `main`.
+- **Firebase App Distribution (`.github/workflows/firebase-distribute.yml`)**: Manual `workflow_dispatch` or `v*` tag release workflow distributing signed `directApk` (`.apk`, with in-app updates via `AppUpdateManager`) or `playBundle` (`.aab`) builds to the `family` tester group. See [docs/DISTRIBUTION.md](docs/DISTRIBUTION.md) for full details.

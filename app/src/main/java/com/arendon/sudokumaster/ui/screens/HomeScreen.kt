@@ -15,31 +15,47 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.arendon.sudokumaster.BuildConfig
 import com.arendon.sudokumaster.data.local.PatternMasterySummary
 import com.arendon.sudokumaster.domain.model.ComplexityTier
 import com.arendon.sudokumaster.domain.model.PatternType
 import com.arendon.sudokumaster.ui.components.ThemeSelectionButton
 import com.arendon.sudokumaster.ui.theme.ThemeMode
+import com.arendon.sudokumaster.updates.AppUpdateManager
+import com.arendon.sudokumaster.updates.UpdateCheckOutcome
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -50,12 +66,22 @@ fun HomeScreen(
     themeMode: ThemeMode = ThemeMode.SYSTEM,
     onSelectTheme: (ThemeMode) -> Unit = {}
 ) {
+    val context = LocalContext.current
+    val updateManager = remember(context) { AppUpdateManager(context.applicationContext) }
+    val scope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
+    var checkingUpdates by remember { mutableStateOf(false) }
+    val showUpdateAction = remember(updateManager) {
+        updateManager.isFirebaseConfigured() || BuildConfig.DISTRIBUTION_CHANNEL == "DIRECT_APK"
+    }
+
     val totalExercises = masterySummaries.values.sumOf { it.totalExercises }.coerceAtLeast(120)
     val totalSolved = masterySummaries.values.sumOf { it.solvedCount }
     val totalClean = masterySummaries.values.sumOf { it.cleanSolvedCount }
     val patternsMastered = masterySummaries.values.count { it.solvedCount >= 10 }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {
@@ -73,6 +99,34 @@ fun HomeScreen(
                     }
                 },
                 actions = {
+                    if (showUpdateAction) {
+                        IconButton(
+                            enabled = !checkingUpdates,
+                            onClick = {
+                                checkingUpdates = true
+                                scope.launch {
+                                    try {
+                                        val message = when (val outcome = updateManager.checkForUpdates()) {
+                                            is UpdateCheckOutcome.Completed -> outcome.message
+                                            is UpdateCheckOutcome.PlayStoreManaged -> outcome.message
+                                            is UpdateCheckOutcome.Failed -> outcome.reason
+                                            UpdateCheckOutcome.Unavailable ->
+                                                "In-app updates require a Firebase App Distribution release build."
+                                        }
+                                        snackbarHostState.showSnackbar(message)
+                                    } finally {
+                                        checkingUpdates = false
+                                    }
+                                }
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.SystemUpdate,
+                                contentDescription = "Check for app updates",
+                                tint = Color.White
+                            )
+                        }
+                    }
                     ThemeSelectionButton(
                         currentTheme = themeMode,
                         onSelectTheme = onSelectTheme,
