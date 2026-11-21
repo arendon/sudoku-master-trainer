@@ -148,3 +148,5 @@ dependencies {
     testImplementation(libs.junit)
     debugImplementation(libs.androidx.ui.tooling)
 }
+
+apply(from = rootProject.file("gradle/security-constraints.gradle.kts"))
